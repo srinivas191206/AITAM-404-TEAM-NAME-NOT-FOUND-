@@ -61,10 +61,10 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
     }
   };
 
-  const handleContinuePress = async () => {
-    await hapticService.medium();
+  const handleContinuePress = () => {
+    hapticService.medium();
     if (activeMode === 'blind') {
-      await outputService.announce(`Continuing to Registration with ${getLanguageLabel(selectedLanguage)}.`);
+      outputService.announce(`Continuing to Registration with ${getLanguageLabel(selectedLanguage)}.`);
     }
     onContinue();
   };
