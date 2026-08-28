@@ -1,5 +1,6 @@
 ﻿import { CameraFrameResult } from './cameraService';
 import { NativeVisionBridge } from './nativeVisionBridge';
+import { groqVisionService } from './groqVisionService';
 
 export interface OCRTextBlock {
   text: string;
@@ -29,24 +30,16 @@ class OCRService {
   private confidenceThreshold: number = 0.45;
   private isProcessing: boolean = false;
 
-  /**
-   * Lightweight deterministic text cleaner
-   */
   public cleanText(rawText: string): string {
     if (!rawText) return '';
 
     let cleaned = rawText
-      // Replace non-breaking spaces and tabs
       .replace(/[\t\r\f\v]/g, ' ')
-      // Merge hyphenated line-breaks (e.g. "com- \n plete" -> "complete")
       .replace(/(\w+)-\s*\n\s*(\w+)/g, '$1$2')
-      // Replace multiple newlines with single space
       .replace(/\n+/g, ' ')
-      // Collapse multiple spaces
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Ensure sentence punctuation has proper spacing
     cleaned = cleaned
       .replace(/\s*([,.:;?!])\s*/g, '$1 ')
       .replace(/\s+/g, ' ')
@@ -55,9 +48,6 @@ class OCRService {
     return cleaned;
   }
 
-  /**
-   * Format text for comfortable auditory consumption by visually impaired users
-   */
   public formatForSpeech(cleanedText: string, maxLength: number = 280): { spokenText: string; isTruncated: boolean } {
     if (!cleanedText || cleanedText.trim().length === 0) {
       return {
@@ -73,7 +63,6 @@ class OCRService {
       };
     }
 
-    // Find nearest sentence or word boundary before maxLength
     let cutPoint = cleanedText.lastIndexOf('.', maxLength);
     if (cutPoint === -1 || cutPoint < maxLength * 0.6) {
       cutPoint = cleanedText.lastIndexOf(' ', maxLength);
@@ -90,7 +79,7 @@ class OCRService {
   }
 
   /**
-   * Execute real on-device Google ML Kit OCR inference on captured camera frame
+   * Real On-Device Google ML Kit Neural OCR + Groq Vision Failover (ZERO MOCK DATA)
    */
   public async recognizeText(frame: CameraFrameResult): Promise<OCRProcessingResult> {
     const startTime = Date.now();
@@ -107,12 +96,11 @@ class OCRService {
     try {
       this.isProcessing = true;
 
-      // 1. Execute Real-Time Native Google ML Kit OCR Engine
-      const nativeOcr = await NativeVisionBridge.recognizeText(frame.uri);
-
       let extractedRawText = '';
       let blocks: OCRTextBlock[] = [];
 
+      // 1. Try Native Google ML Kit OCR on frame
+      const nativeOcr = await NativeVisionBridge.recognizeText(frame.uri);
       if (nativeOcr && nativeOcr.text && nativeOcr.text.trim().length > 0) {
         extractedRawText = nativeOcr.text.trim();
         blocks = nativeOcr.blocks.map((b) => ({
@@ -121,17 +109,25 @@ class OCRService {
           confidence: 0.95,
           boundingBox: b.boundingBox,
         }));
-      } else {
-        // Fallback for emulator synthetic frames
-        extractedRawText = 'Welcome to Access Plus. Accessible AI Assistant for Blind and Deaf Users.';
-        blocks = [
-          {
-            text: extractedRawText,
-            lines: ['Welcome to Access Plus.', 'Accessible AI Assistant for Blind and Deaf Users.'],
-            confidence: 0.92,
-            boundingBox: { x: 50, y: 120, width: 980, height: 400 },
-          },
-        ];
+      }
+
+      // 2. Try Groq Vision if native OCR returned empty
+      if (!extractedRawText && frame.base64) {
+        const groqText = await groqVisionService.readText(frame.base64);
+        if (groqText && !groqText.includes("couldn't find") && !groqText.includes("no readable text")) {
+          extractedRawText = groqText.trim();
+        }
+      }
+
+      // If genuinely no text in view, honestly report to user
+      if (!extractedRawText || extractedRawText.trim().length === 0) {
+        const inferenceTimeMs = Date.now() - startTime;
+        return {
+          success: false,
+          message: "I couldn't find readable text in view. Please point at text and try again.",
+          inferenceTimeMs,
+          error: 'no_text_found',
+        };
       }
 
       const cleanedText = this.cleanText(extractedRawText);
@@ -143,7 +139,7 @@ class OCRService {
         blocks,
         isTruncated,
         spokenText,
-        confidence: 0.92,
+        confidence: 0.95,
       };
 
       const inferenceTimeMs = Date.now() - startTime;
