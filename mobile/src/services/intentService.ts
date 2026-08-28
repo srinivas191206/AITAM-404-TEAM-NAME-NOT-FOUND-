@@ -245,6 +245,7 @@ class IntentService {
       'read what is written here',
       'read whats written here',
       "read what's written here",
+      'tell me what this says',
       'read sign',
       'read document',
       'read letter',

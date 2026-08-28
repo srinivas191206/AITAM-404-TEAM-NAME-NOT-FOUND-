@@ -5,6 +5,7 @@ import {
   DetectionPipelineResult,
 } from './objectDetectionService';
 import { SpatialAnalysisResult } from './spatialAwarenessService';
+import { ocrService, OCRProcessingResult, OCRResult } from './ocrService';
 
 export interface VisionFrameMetadata {
   uri: string;
@@ -18,6 +19,7 @@ export interface VisionProcessingResult {
   message: string;
   detections?: DetectionResult[];
   spatialAnalysis?: SpatialAnalysisResult;
+  ocrResult?: OCRResult;
   frameMetadata?: VisionFrameMetadata;
   inferenceTimeMs?: number;
   error?: string;
@@ -34,6 +36,7 @@ class VisionService {
   private isCameraActive: boolean = false;
   private lastDetections: DetectionResult[] = [];
   private lastSpatialAnalysis: SpatialAnalysisResult | null = null;
+  private lastOcrResult: OCRResult | null = null;
 
   /**
    * Register the active CameraView capture delegate
@@ -106,7 +109,7 @@ class VisionService {
   }
 
   /**
-   * Process camera frame through on-device Object Detection & Spatial Awareness (Phase 5.3)
+   * Process camera frame through on-device Object Detection & Spatial Awareness (Phase 5)
    */
   public async processFrame(frame: CameraFrameResult): Promise<VisionProcessingResult> {
     if (!frame || !frame.uri) {
@@ -171,7 +174,6 @@ class VisionService {
     const frame = await this.captureFrame();
 
     if (!frame) {
-      // Fallback frame for simulation/emulator environments
       const syntheticFrame: CameraFrameResult = {
         uri: 'file://simulated_frame.jpg',
         width: 1080,
@@ -187,12 +189,68 @@ class VisionService {
     return result;
   }
 
+  /**
+   * Primary OCR query handler invoked by Command Router for READ_TEXT (Phase 6.1)
+   */
+  public async queryOcr(): Promise<VisionProcessingResult> {
+    // 1. Permission check
+    const permitted = await this.ensurePermission();
+    if (!permitted) {
+      return {
+        success: false,
+        message:
+          "I can't access the camera. You can enable camera access in your phone settings.",
+        error: 'permission_denied',
+      };
+    }
+
+    // 2. Open camera
+    await this.openCamera();
+
+    // Stabilization delay for camera viewfinder
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // 3. Capture frame
+    const frame = await this.captureFrame();
+
+    const targetFrame: CameraFrameResult = frame || {
+      uri: 'file://simulated_ocr_frame.jpg',
+      width: 1080,
+      height: 1920,
+      timestamp: Date.now(),
+    };
+
+    // 4. Process frame through On-Device OCR Pipeline
+    const ocrProcessing: OCRProcessingResult = await ocrService.recognizeText(targetFrame);
+    this.lastOcrResult = ocrProcessing.ocrResult || null;
+
+    const frameMetadata: VisionFrameMetadata = {
+      uri: targetFrame.uri,
+      width: targetFrame.width,
+      height: targetFrame.height,
+      timestamp: targetFrame.timestamp,
+    };
+
+    return {
+      success: ocrProcessing.success,
+      message: ocrProcessing.message,
+      ocrResult: ocrProcessing.ocrResult,
+      frameMetadata,
+      inferenceTimeMs: ocrProcessing.inferenceTimeMs,
+      error: ocrProcessing.error,
+    };
+  }
+
   public getLastDetections(): DetectionResult[] {
     return this.lastDetections;
   }
 
   public getLastSpatialAnalysis(): SpatialAnalysisResult | null {
     return this.lastSpatialAnalysis;
+  }
+
+  public getLastOcrResult(): OCRResult | null {
+    return this.lastOcrResult;
   }
 
   public getIsActive(): boolean {

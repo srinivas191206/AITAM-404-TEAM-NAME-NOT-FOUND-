@@ -1,6 +1,5 @@
 ﻿import { intentService, IntentDetectionResult, RecognizedIntentType } from './intentService';
 import { visionService } from './visionService';
-import { ocrService } from './ocrService';
 import { currencyService } from './currencyService';
 import { sceneUnderstandingService } from './sceneUnderstandingService';
 import { ttsService } from './ttsService';
@@ -57,7 +56,7 @@ class CommandRouter {
       }
 
       case 'READ_TEXT': {
-        const result = await ocrService.readText();
+        const result = await visionService.queryOcr();
         responseMessage = result.message;
         break;
       }

@@ -150,7 +150,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   /**
-   * Process spoken command through Phase 4/5 Intent Understanding, Router & Vision
+   * Process spoken command through Intent Understanding, Router, Vision & OCR
    */
   const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
@@ -176,7 +176,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       return;
     }
 
-    // Haptic feedback based on recognition result & spatial awareness
+    // Haptic feedback based on recognition result & intent
     if (routeResult.intent === 'UNKNOWN') {
       await hapticService.error();
     } else if (routeResult.intent === 'VISION_QUERY') {
@@ -186,6 +186,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       } else {
         await hapticService.light();
       }
+    } else if (routeResult.intent === 'READ_TEXT') {
+      await hapticService.light();
     } else {
       await hapticService.success();
     }
@@ -197,8 +199,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       onDone: async () => {
         if (isMountedRef.current) {
           await hapticService.light();
-          // Pause camera after vision perception query completes
-          if (routeResult.intent === 'VISION_QUERY') {
+          // Pause camera after vision or OCR perception query completes
+          if (routeResult.intent === 'VISION_QUERY' || routeResult.intent === 'READ_TEXT') {
             visionService.closeCamera();
             setIsCameraActive(false);
           }
@@ -207,7 +209,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       },
       onError: () => {
         if (isMountedRef.current) {
-          if (routeResult.intent === 'VISION_QUERY') {
+          if (routeResult.intent === 'VISION_QUERY' || routeResult.intent === 'READ_TEXT') {
             visionService.closeCamera();
             setIsCameraActive(false);
           }
@@ -393,7 +395,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </Text>
           <Text style={styles.micSubtitle}>
             {voiceState === 'LISTENING'
-              ? 'Speak naturally (e.g. "What\'s in front of me?")'
+              ? 'Speak naturally (e.g. "What\'s in front of me?" or "Read this")'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
@@ -417,7 +419,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </View>
         ) : null}
 
-        {/* TEST MATRIX TRAY (PHASE 4 & 5 TEST COMMANDS) */}
+        {/* TEST MATRIX TRAY (PHASE 4, 5, 6 TEST COMMANDS) */}
         <View style={styles.testTray}>
           <Text style={styles.testTrayLabel}>TEST COMMAND INTENT MATRIX:</Text>
           <View style={styles.testChipsRow}>
@@ -446,9 +448,19 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Test Read this"
               accessibilityRole="button"
               onPress={() => triggerSimulation('Read this.')}
-              style={styles.testChip}
+              style={[styles.testChip, styles.testChipOcr]}
             >
-              <Text style={styles.testChipText}>"Read this."</Text>
+              <Text style={styles.testChipOcrText}>📖 "Read this."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test What does this say"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('What does this say?')}
+              style={[styles.testChip, styles.testChipOcr]}
+            >
+              <Text style={styles.testChipOcrText}>📖 "What does this say?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -751,6 +763,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: Colors.blindPrimary,
+  },
+  testChipOcr: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#1E293B',
+  },
+  testChipOcrText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#60A5FA',
   },
   testChipUnknown: {
     borderColor: '#78350F',
