@@ -1,4 +1,4 @@
-﻿import { cameraService, CameraFrameResult } from './cameraService';
+import { cameraService, CameraFrameResult } from './cameraService';
 import {
   objectDetectionService,
   DetectionResult,
@@ -12,6 +12,7 @@ import {
   SceneProcessingResult,
   SceneResult,
 } from './sceneUnderstandingService';
+import { geminiVisionService } from './geminiVisionService';
 
 export interface VisionFrameMetadata {
   uri: string;
@@ -152,8 +153,32 @@ class VisionService {
     }
 
     await this.openCamera();
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 350));
     const frame = await this.captureFrame();
+
+    if (frame && frame.base64 && geminiVisionService.hasActiveKeys()) {
+      try {
+        const navaigatePrompt = `Purpose:
+You're an advanced navigation and obstacle assistant designed to help visually impaired individuals. Analyze this live camera frame, identify all specific obstacles, items, their colors, sizes, and relative positions (left, ahead, right), and tell the user what to do safely. Keep your answer to 2 or 3 concise, actionable sentences suitable for text-to-speech. Speak directly to the user as their eyes.`;
+        const geminiSpeech = await geminiVisionService.analyzeVision(frame.base64, navaigatePrompt);
+        if (geminiSpeech && geminiSpeech.trim().length > 0) {
+          // Also run detector in background for bounding boxes
+          this.processFrame(frame).catch(() => {});
+          return {
+            success: true,
+            message: geminiSpeech.trim(),
+            frameMetadata: {
+              uri: frame.uri,
+              width: frame.width,
+              height: frame.height,
+              timestamp: frame.timestamp,
+            },
+          };
+        }
+      } catch (e) {
+        console.warn('[VisionService] NavAIgate Gemini vision query note:', e);
+      }
+    }
 
     const targetFrame: CameraFrameResult = frame || {
       uri: 'file://simulated_vision_frame.jpg',

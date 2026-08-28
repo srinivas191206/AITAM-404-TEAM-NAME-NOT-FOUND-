@@ -8,6 +8,7 @@ import {
 import { imageAnalyzer } from '../utils/imageAnalyzer';
 import { NativeVisionBridge } from './nativeVisionBridge';
 import { groqVisionService } from './groqVisionService';
+import { geminiVisionService } from './geminiVisionService';
 
 export type ImagePosition = HorizontalPosition;
 
@@ -199,8 +200,51 @@ class ObjectDetectionService {
 
       const rawDetections: DetectionResult[] = [];
 
-      // 1. PRIMARY NEURAL DETECTOR: YOLOv8 Object Detection Engine
-      if (frame.base64) {
+      // 1. PRIMARY NEURAL DETECTOR: NavAIgate Gemini 3.6 Flash Real-Time Vision Model
+      if (frame.base64 && geminiVisionService.hasActiveKeys()) {
+        try {
+          const prompt = `You are the primary object detector for a blind user.
+Analyze this image and identify all prominent objects, obstacles, people, and hazards with their position (LEFT, CENTER, or RIGHT).
+Return ONLY a valid JSON array in this exact format:
+[{"label": "chair", "position": "CENTER", "confidence": 0.95}]
+If no prominent objects, return []`;
+          const geminiText = await geminiVisionService.analyzeVision(frame.base64, prompt);
+          if (geminiText) {
+            const jsonMatch = geminiText.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                parsed.forEach((item: any, idx: number) => {
+                  const pos: HorizontalPosition = ['LEFT', 'CENTER', 'RIGHT'].includes(item.position?.toUpperCase())
+                    ? item.position.toUpperCase()
+                    : 'CENTER';
+                  const xPos = pos === 'LEFT' ? Math.round(imageWidth * 0.15) : pos === 'RIGHT' ? Math.round(imageWidth * 0.70) : Math.round(imageWidth * 0.40);
+                  rawDetections.push({
+                    id: `navaigate_gemini_${idx}`,
+                    label: String(item.label || 'object').toLowerCase(),
+                    confidence: typeof item.confidence === 'number' ? item.confidence : 0.95,
+                    boundingBox: {
+                      x: xPos,
+                      y: Math.round(imageHeight * 0.3),
+                      width: Math.round(imageWidth * 0.3),
+                      height: Math.round(imageHeight * 0.4),
+                    },
+                    centerX: xPos + Math.round(imageWidth * 0.15),
+                    centerY: Math.round(imageHeight * 0.5),
+                    position: pos,
+                  });
+                });
+                console.log(`[ObjectDetection] NavAIgate Gemini detected ${rawDetections.length} objects.`);
+              }
+            }
+          }
+        } catch (geminiErr) {
+          console.warn('[ObjectDetectionService] NavAIgate Gemini detection error:', geminiErr);
+        }
+      }
+
+      // 2. SECONDARY DETECTOR: Local YOLOv8 Microservice (if running on LAN)
+      if (rawDetections.length === 0 && frame.base64) {
         const endpoints = [
           'http://10.204.134.150:5001/detect',
           'http://10.0.2.2:5001/detect',
@@ -210,7 +254,7 @@ class ObjectDetectionService {
         for (const ep of endpoints) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const timeoutId = setTimeout(() => controller.abort(), 1500);
 
             const resp = await fetch(ep, {
               method: 'POST',
