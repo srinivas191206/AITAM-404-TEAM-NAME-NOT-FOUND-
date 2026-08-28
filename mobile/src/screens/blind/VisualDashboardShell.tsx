@@ -228,7 +228,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
     setErrorMessage(null);
     setVoiceState('LISTENING');
-    setResponseMessage(ttsService.translateKey('listening'));
 
     const started = await speechRecognitionService.startListening({
       onStart: () => {
