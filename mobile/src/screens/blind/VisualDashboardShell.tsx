@@ -101,7 +101,7 @@ const CameraTabIcon = (color: string) => (
 
 const NavTabIcon = (color: string) => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+    <Path d="M3 11L22 2L13 21L11 13L3 11Z" />
   </Svg>
 );
 
