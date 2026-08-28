@@ -18,6 +18,7 @@ import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
 import { ttsService } from '../../services/ttsService';
+import { speechRecognitionService } from '../../services/speechRecognitionService';
 import { useApp } from '../../context/AppContext';
 
 interface LanguageSelectionScreenProps {
@@ -61,14 +62,51 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
 
   useEffect(() => {
     if (activeMode === 'blind') {
-      outputService.announce(
-        `Step 2 of 5: Please select your language. ${getLanguageLabel(
-          selectedLanguage
-        )} is currently selected. Double tap to change language, or tap the continue button at the bottom.`,
-        'normal'
-      );
+      // Trilingual announcement: English, Telugu, Hindi
+      const promptEng = 'Please state your preferred language: English, Telugu, or Hindi.';
+      const promptTel = 'దయచేసి మీ భాషను చెప్పండి: ఇంగ్లీష్, తెలుగు, లేదా హిందీ.';
+      const promptHin = 'कृपया अपनी भाषा बताएं: इंग्लिश, तेलुगु, या हिंदी।';
+
+      outputService.announce(`${promptEng} ... ${promptTel} ... ${promptHin}`, 'high');
+
+      // Auto-listen for voice language selection
+      speechRecognitionService.startListening({
+        onResult: (spokenText: string) => {
+          const lower = spokenText.toLowerCase();
+          if (lower.includes('telugu') || lower.includes('తెలుగు') || lower.includes('telgu')) {
+            handleVoiceSelect('te', 'Telugu');
+          } else if (lower.includes('hindi') || lower.includes('हिंदी') || lower.includes('hindu')) {
+            handleVoiceSelect('hi', 'Hindi');
+          } else if (lower.includes('english') || lower.includes('inglish')) {
+            handleVoiceSelect('en', 'English');
+          }
+        },
+        onError: () => {},
+      });
     }
+
+    return () => {
+      speechRecognitionService.stopListening();
+    };
   }, [activeMode]);
+
+  const handleVoiceSelect = async (code: LanguageCode, label: string) => {
+    await hapticService.medium();
+    onSelectLanguage(code);
+    ttsService.setLanguage(code);
+    setVisualToast(`${label} Selected`);
+
+    const confirmation = code === 'te'
+      ? 'తెలుగు ఎంపిక చేయబడింది.'
+      : code === 'hi'
+      ? 'हिंदी भाषा चुनी गई।'
+      : 'English language selected.';
+
+    await outputService.announce(confirmation, 'high');
+    setTimeout(() => {
+      onContinue();
+    }, 1200);
+  };
 
   const handleSelect = async (lang: LanguageOption) => {
     await hapticService.medium();
@@ -91,7 +129,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
   const handleContinuePress = () => {
     hapticService.medium();
     if (activeMode === 'blind') {
-      outputService.announce(`Continuing to Registration with ${getLanguageLabel(selectedLanguage)}.`);
+      outputService.announce(`Continuing with ${getLanguageLabel(selectedLanguage)}.`);
     }
     onContinue();
   };
@@ -116,7 +154,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
           <Text style={[styles.title, { color: palette.primaryText }]}>Language Preferences</Text>
           <Text style={[styles.subtitle, { color: palette.secondaryText }]}>
             {activeMode === 'blind'
-              ? 'Voice responses and screen reader guidance will use this language.'
+              ? 'Say English, Telugu, or Hindi out loud. Voice assistant will adapt to your choice.'
               : 'Screen text and live captions will adapt to this language.'}
           </Text>
         </View>

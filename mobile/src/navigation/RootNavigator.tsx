@@ -46,7 +46,14 @@ export const RootNavigator: React.FC = () => {
       case 'welcome':
         return (
           <WelcomeScreen
-            onContinue={() => goToOnboardingStep('mode_selection')}
+            onContinue={async (selectedMode) => {
+              if (selectedMode) {
+                await setMode(selectedMode);
+                await goToOnboardingStep('language_selection');
+              } else {
+                await goToOnboardingStep('mode_selection');
+              }
+            }}
           />
         );
 

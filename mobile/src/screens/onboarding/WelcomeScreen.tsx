@@ -6,31 +6,21 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
-import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
+import { speechRecognitionService } from '../../services/speechRecognitionService';
 
 interface WelcomeScreenProps {
-  onContinue: () => void;
+  onContinue: (selectedMode?: 'blind' | 'deaf' | 'guardian') => void;
 }
-
-// Crisp Teal & Slate SVG Icons
-const BadgeShieldIcon: React.FC<{ color?: string; size?: number }> = ({
-  color = '#0F9D9A',
-  size = 14,
-}) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <Path d="M12 8v5M12 16h.01" strokeWidth="2.5" />
-  </Svg>
-);
 
 const EyeIcon: React.FC<{ color?: string; size?: number }> = ({
   color = '#0F9D9A',
-  size = 24,
+  size = 28,
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
@@ -40,7 +30,7 @@ const EyeIcon: React.FC<{ color?: string; size?: number }> = ({
 
 const EarIcon: React.FC<{ color?: string; size?: number }> = ({
   color = '#0F9D9A',
-  size = 24,
+  size = 28,
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10" />
@@ -51,7 +41,7 @@ const EarIcon: React.FC<{ color?: string; size?: number }> = ({
 
 const ShieldIcon: React.FC<{ color?: string; size?: number }> = ({
   color = '#0F9D9A',
-  size = 24,
+  size = 28,
 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -71,10 +61,30 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
   };
 
   useEffect(() => {
-    outputService.announce(
-      'Welcome to Access Plus. An intelligent accessibility and safety companion. Tap the button at the bottom to get started.',
-      'normal'
-    );
+    // Spoken audio instructions in English, Telugu, and Hindi
+    const announcementText =
+      'Welcome to Access Plus. Say "Blind" for Visual Assistance, or say "Deaf" for Hearing Assistance. You can also tap anywhere on the screen.';
+
+    outputService.announce(announcementText, 'high');
+
+    // Auto-listen for voice mode command
+    speechRecognitionService.startListening({
+      onResult: (spokenText: string) => {
+        const lower = spokenText.toLowerCase();
+        if (lower.includes('blind') || lower.includes('visual') || lower.includes('eye')) {
+          onContinue('blind');
+        } else if (lower.includes('deaf') || lower.includes('hearing') || lower.includes('ear')) {
+          onContinue('deaf');
+        } else if (lower.includes('guardian') || lower.includes('caregiver')) {
+          onContinue('guardian');
+        }
+      },
+      onError: () => {},
+    });
+
+    return () => {
+      speechRecognitionService.stopListening();
+    };
   }, []);
 
   return (
@@ -83,69 +93,73 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* TOP BRANDING & HEADER */}
         <View style={styles.headerSection}>
-          <View style={[styles.badge, { backgroundColor: palette.accentLight }]}>
-            <BadgeShieldIcon color={palette.accentTeal} size={14} />
-            <Text style={[styles.badgeText, { color: palette.accentTeal }]}>
-              ACCESSIBILITY & SAFETY
-            </Text>
-          </View>
-          <Text style={[styles.title, { color: palette.primaryText }]}>Welcome to Access+</Text>
+          <Text style={[styles.title, { color: palette.primaryText }]}>Access+ Assistant</Text>
           <Text style={[styles.subtitle, { color: palette.secondaryText }]}>
-            An intelligent accessibility and safety companion designed for physical mobile devices.
+            Select your assistance mode to continue. Voice assistant is listening...
           </Text>
         </View>
 
-        {/* VALUE PROPOSITION CARDS */}
+        {/* 0-TOUCH LARGE SELECTION CARDS */}
         <View style={styles.cardsSection}>
-          {/* Card 1: Visual Assistance */}
-          <View style={[styles.valueCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          {/* Visual Assistance (Blind Mode) */}
+          <TouchableOpacity
+            accessible={true}
+            accessibilityLabel="Visual Assistance Mode for Blind users. Say Blind or tap here."
+            accessibilityRole="button"
+            activeOpacity={0.8}
+            onPress={() => onContinue('blind')}
+            style={[styles.modeCard, { backgroundColor: '#F4FBFB', borderColor: palette.accentTeal }]}
+          >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <EyeIcon color={palette.accentTeal} size={24} />
+              <EyeIcon color={palette.accentTeal} size={30} />
             </View>
             <View style={styles.cardTextGroup}>
-              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>Visual Assistance</Text>
+              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>👁️ Visual Assistance (Blind)</Text>
               <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
-                Voice-first assistant, camera scene understanding, document reading, and pedestrian guidance.
+                Hands-free voice assistant, camera vision, OCR text reading, and INR currency detection. Say "Blind" to select.
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          {/* Card 2: Hearing Assistance */}
-          <View style={[styles.valueCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          {/* Hearing Assistance (Deaf Mode) */}
+          <TouchableOpacity
+            accessible={true}
+            accessibilityLabel="Hearing Assistance Mode for Deaf users. Say Deaf or tap here."
+            accessibilityRole="button"
+            activeOpacity={0.8}
+            onPress={() => onContinue('deaf')}
+            style={[styles.modeCard, { backgroundColor: palette.card, borderColor: palette.border }]}
+          >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <EarIcon color={palette.accentTeal} size={24} />
+              <EarIcon color={palette.accentTeal} size={30} />
             </View>
             <View style={styles.cardTextGroup}>
-              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>Hearing Assistance</Text>
+              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>🧏 Hearing Assistance (Deaf)</Text>
               <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
-                Live conversation captions, ambient sound radar, siren/horn detection, and visual alerts.
+                Live speech captions, sound radar (siren, horn, doorbell), and visual emergency alerts. Say "Deaf" to select.
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          {/* Card 3: Guardian & Emergency SOS */}
-          <View style={[styles.valueCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          {/* Guardian Mode */}
+          <TouchableOpacity
+            accessible={true}
+            accessibilityLabel="Guardian Monitor Mode. Say Guardian or tap here."
+            accessibilityRole="button"
+            activeOpacity={0.8}
+            onPress={() => onContinue('guardian')}
+            style={[styles.modeCard, { backgroundColor: palette.card, borderColor: palette.border }]}
+          >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <ShieldIcon color={palette.accentTeal} size={24} />
+              <ShieldIcon color={palette.accentTeal} size={30} />
             </View>
             <View style={styles.cardTextGroup}>
-              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>Guardian & Emergency SOS</Text>
+              <Text style={[styles.cardTitle, { color: palette.primaryText }]}>🛡️ Guardian Monitor</Text>
               <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
-                Impact sensor fall detection with a 5-second cancel timer and live location alerts.
+                Caregiver safe-zone geofencing and emergency notification alerts.
               </Text>
             </View>
-          </View>
-        </View>
-
-        {/* GET STARTED CTA BUTTON */}
-        <View style={styles.bottomSection}>
-          <AccessibleButton
-            title="Get Started →"
-            size="large"
-            variant="teal"
-            accessibilityHint="Double tap to start the setup process"
-            onPress={onContinue}
-          />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -157,36 +171,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
   },
   headerSection: {
-    marginTop: Spacing.xs,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: Spacing.md,
-    gap: 6,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    marginBottom: Spacing.lg,
   },
   title: {
     fontSize: 34,
     fontWeight: '900',
     letterSpacing: -0.5,
-    marginBottom: Spacing.xs + 2,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 16,
@@ -194,37 +190,34 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   cardsSection: {
-    marginVertical: Spacing.lg,
-    gap: 14,
+    gap: 16,
   },
-  valueCard: {
+  modeCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 1,
-    // Subtle elevation shadow
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 22,
+    borderWidth: 2,
     shadowColor: '#0F9D9A',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
-    marginTop: 2,
+    marginRight: 16,
   },
   cardTextGroup: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
     marginBottom: 4,
     letterSpacing: -0.2,
   },
@@ -232,8 +225,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '400',
-  },
-  bottomSection: {
-    marginTop: Spacing.md,
   },
 });
