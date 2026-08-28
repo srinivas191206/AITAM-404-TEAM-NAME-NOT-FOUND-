@@ -1,4 +1,5 @@
-﻿import { CameraFrameResult } from './cameraService';
+﻿import { Platform } from 'react-native';
+import { CameraFrameResult } from './cameraService';
 import { NativeVisionBridge } from './nativeVisionBridge';
 import { groqVisionService } from './groqVisionService';
 
@@ -27,8 +28,13 @@ export interface OCRProcessingResult {
 }
 
 class OCRService {
-  private confidenceThreshold: number = 0.45;
   private isProcessing: boolean = false;
+
+  private getPaddleOcrUrl(): string {
+    // 10.0.2.2 for Android emulator, LAN IP for physical device
+    const host = Platform.OS === 'android' ? '10.0.2.2' : '10.204.134.150';
+    return `http://${host}:5001/ocr`;
+  }
 
   public cleanText(rawText: string): string {
     if (!rawText) return '';
@@ -79,12 +85,13 @@ class OCRService {
   }
 
   /**
-   * Real On-Device Google ML Kit Neural OCR + Groq Vision Failover (ZERO MOCK DATA)
+   * Primary: PaddleOCR Neural Recognition Engine
+   * Fallback: Native Google ML Kit OCR + Groq Vision
    */
   public async recognizeText(frame: CameraFrameResult): Promise<OCRProcessingResult> {
     const startTime = Date.now();
 
-    if (!frame || !frame.uri) {
+    if (!frame || (!frame.uri && !frame.base64)) {
       return {
         success: false,
         message: "I couldn't analyze the view. Please try again.",
@@ -99,19 +106,48 @@ class OCRService {
       let extractedRawText = '';
       let blocks: OCRTextBlock[] = [];
 
-      // 1. Try Native Google ML Kit OCR on frame
-      const nativeOcr = await NativeVisionBridge.recognizeText(frame.uri);
-      if (nativeOcr && nativeOcr.text && nativeOcr.text.trim().length > 0) {
-        extractedRawText = nativeOcr.text.trim();
-        blocks = nativeOcr.blocks.map((b) => ({
-          text: b.text,
-          lines: b.lines,
-          confidence: 0.95,
-          boundingBox: b.boundingBox,
-        }));
+      // 1. PRIMARY ENGINE: PaddleOCR
+      if (frame.base64) {
+        try {
+          const paddleResponse = await fetch(this.getPaddleOcrUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: frame.base64 }),
+          });
+
+          if (paddleResponse.ok) {
+            const paddleData = await paddleResponse.json();
+            if (paddleData.success && paddleData.text && paddleData.text.trim().length > 0) {
+              extractedRawText = paddleData.text.trim();
+              blocks = (paddleData.blocks || []).map((b: any) => ({
+                text: b.text,
+                lines: [b.text],
+                confidence: b.confidence || 0.98,
+                boundingBox: b.boundingBox,
+              }));
+              console.log('[OCRService] PaddleOCR recognized text successfully.');
+            }
+          }
+        } catch (paddleErr) {
+          console.warn('[OCRService] PaddleOCR service call note:', paddleErr);
+        }
       }
 
-      // 2. Try Groq Vision if native OCR returned empty
+      // 2. SECONDARY ENGINE: Native Google ML Kit OCR
+      if (!extractedRawText && frame.uri) {
+        const nativeOcr = await NativeVisionBridge.recognizeText(frame.uri);
+        if (nativeOcr && nativeOcr.text && nativeOcr.text.trim().length > 0) {
+          extractedRawText = nativeOcr.text.trim();
+          blocks = nativeOcr.blocks.map((b) => ({
+            text: b.text,
+            lines: b.lines,
+            confidence: 0.95,
+            boundingBox: b.boundingBox,
+          }));
+        }
+      }
+
+      // 3. TERTIARY ENGINE: Groq Vision
       if (!extractedRawText && frame.base64) {
         const groqText = await groqVisionService.readText(frame.base64);
         if (groqText && !groqText.includes("couldn't find") && !groqText.includes("no readable text")) {
@@ -139,7 +175,7 @@ class OCRService {
         blocks,
         isTruncated,
         spokenText,
-        confidence: 0.95,
+        confidence: 0.98,
       };
 
       const inferenceTimeMs = Date.now() - startTime;
