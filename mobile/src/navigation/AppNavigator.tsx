@@ -77,7 +77,7 @@ export const AppNavigator: React.FC = () => {
       return (
         <DeafDashboardScreen
           onNavigateToCaptions={() => setDeafScreen('captions')}
-          onNavigateToSoundAlerts={() => setDeafScreen('sound_alerts')}
+          onNavigateToAlerts={() => setDeafScreen('sound_alerts')}
           onSwitchMode={handleResetToModeSelect}
         />
       );

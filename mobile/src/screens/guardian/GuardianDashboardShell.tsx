@@ -1,114 +1,95 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  ScrollView,
-  TouchableOpacity,
 } from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../theme/colors';
-import { Spacing } from '../../theme/spacing';
-import { AccessibleButton } from '../../components/AccessibleButton';
+import { BottomTabBar, TabItem } from '../../components/BottomTabBar';
+import { GuardianDashboardScreen } from './GuardianDashboardScreen';
 
 interface GuardianDashboardShellProps {
   onOpenSettings: () => void;
 }
 
+const ShieldTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </Svg>
+);
+
+const PinTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <Circle cx="12" cy="10" r="3" fill={color} />
+  </Svg>
+);
+
+const SettingsTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="3" />
+    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </Svg>
+);
+
 export const GuardianDashboardShell: React.FC<GuardianDashboardShellProps> = ({
   onOpenSettings,
 }) => {
-  const [feedbackNote, setFeedbackNote] = useState<string>(
-    'Guardian telemetry & safe-zone monitoring will connect in Phase 6.'
-  );
+  const [activeTab, setActiveTab] = useState<string>('telemetry');
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
+
+  const tabs: TabItem[] = [
+    {
+      id: 'telemetry',
+      label: 'Caregiver HUD',
+      icon: ShieldTabIcon,
+    },
+    {
+      id: 'safezone',
+      label: 'Safe Zones',
+      icon: PinTabIcon,
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsTabIcon,
+    },
+  ];
+
+  const handleSelectTab = (tabId: string) => {
+    if (tabId === 'settings') {
+      onOpenSettings();
+    } else {
+      setActiveTab(tabId);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>🛡️ Guardian Monitor</Text>
-            <Text style={styles.headerSubtitle}>Assisted User: Connected Device</Text>
-          </View>
-          <TouchableOpacity
-            accessible={true}
-            accessibilityLabel="Open Settings"
-            accessibilityRole="button"
-            onPress={onOpenSettings}
-            style={styles.settingsIconBtn}
-          >
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
+      {/* SCREEN CONTAINER */}
+      <View style={styles.screenContainer}>
+        <GuardianDashboardScreen />
+      </View>
 
-        {/* FEEDBACK STATUS BANNER */}
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>{feedbackNote}</Text>
-        </View>
-
-        {/* PLACEHOLDER 1: ASSISTED USER STATUS & TELEMETRY */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>LIVE ASSISTED USER STATUS</Text>
-            <View style={styles.badgeSafe}>
-              <Text style={styles.badgeTextSafe}>STATUS: NORMAL</Text>
-            </View>
-          </View>
-
-          <View style={styles.metricsRow}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>LAST UPDATE</Text>
-              <Text style={styles.metricValue}>Just now</Text>
-            </View>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>BATTERY</Text>
-              <Text style={styles.metricValue}>85%</Text>
-            </View>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>MODE</Text>
-              <Text style={styles.metricValue}>Assisted</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* PLACEHOLDER 2: LOCATION & MAP CONTAINER */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📍 GPS LOCATION & SAFE-ZONE</Text>
-            <Text style={styles.badgeMuted}>GEOFENCE: 50M</Text>
-          </View>
-
-          <View style={styles.mapPlaceholderBox}>
-            <Text style={styles.mapPlaceholderIcon}>🗺️</Text>
-            <Text style={styles.mapPlaceholderTitle}>Interactive Location Map</Text>
-            <Text style={styles.mapPlaceholderDesc}>
-              Real-time GPS pin tracking, route paths, and safe-zone circle will render here.
-            </Text>
-          </View>
-
-          <AccessibleButton
-            title="Refresh Live Location"
-            size="normal"
-            variant="secondary"
-            onPress={() => setFeedbackNote('Location polling simulation triggered.')}
-          />
-        </View>
-
-        {/* PLACEHOLDER 3: EMERGENCY SOS DISPATCH LOG */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🚨 SOS BROADCAST STATUS</Text>
-            <Text style={styles.statusOkText}>STANDBY ✓</Text>
-          </View>
-          <Text style={styles.placeholderBody}>
-            Direct SMS and push notifications will alert this guardian device instantly when an impact or manual SOS occurs.
-          </Text>
-        </View>
-      </ScrollView>
+      {/* BOTTOM TAB BAR */}
+      <BottomTabBar
+        activeTab={activeTab}
+        tabs={tabs}
+        onSelectTab={handleSelectTab}
+      />
     </SafeAreaView>
   );
 };
@@ -116,151 +97,8 @@ export const GuardianDashboardShell: React.FC<GuardianDashboardShellProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
-  content: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
-    gap: Spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  headerLeft: {
+  screenContainer: {
     flex: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    color: Colors.textMediumEmphasis,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  settingsIconBtn: {
-    padding: Spacing.sm,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusSm,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  settingsIcon: {
-    fontSize: 20,
-  },
-  statusBox: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  statusText: {
-    fontSize: 14,
-    color: Colors.textHighEmphasis,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  sectionCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    letterSpacing: 0.5,
-  },
-  badgeSafe: {
-    backgroundColor: '#143820',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeTextSafe: {
-    color: '#86EFAC',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  badgeMuted: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  metricBox: {
-    flex: 1,
-    backgroundColor: Colors.surfaceInteractive,
-    padding: Spacing.md,
-    borderRadius: Spacing.radiusSm,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  metricLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.textMuted,
-  },
-  metricValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textHighEmphasis,
-    marginTop: 4,
-  },
-  mapPlaceholderBox: {
-    backgroundColor: Colors.surfaceInteractive,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    marginVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  mapPlaceholderIcon: {
-    fontSize: 40,
-    marginBottom: Spacing.xs,
-  },
-  mapPlaceholderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textHighEmphasis,
-  },
-  mapPlaceholderDesc: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: '85%',
-    lineHeight: 18,
-  },
-  statusOkText: {
-    color: Colors.success,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  placeholderBody: {
-    fontSize: 15,
-    color: Colors.textMediumEmphasis,
-    lineHeight: 22,
-    fontWeight: '500',
   },
 });

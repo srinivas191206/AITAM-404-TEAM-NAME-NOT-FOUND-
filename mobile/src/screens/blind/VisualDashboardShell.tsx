@@ -23,6 +23,9 @@ import { visionService } from '../../services/visionService';
 import { cameraService } from '../../services/cameraService';
 import { DetectionResult } from '../../services/objectDetectionService';
 import { VisionCameraPreview } from '../../components/camera/VisionCameraPreview';
+import { BottomTabBar, TabItem } from '../../components/BottomTabBar';
+import { ScenePerceptionScreen } from './ScenePerceptionScreen';
+import { VoiceNavigationScreen } from './VoiceNavigationScreen';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
 
@@ -82,9 +85,37 @@ const ClockIcon = ({ color = '#0F9D9A', size = 16 }) => (
   </Svg>
 );
 
+const VisualTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+    <Circle cx="12" cy="12" r="3" fill={color} />
+  </Svg>
+);
+
+const CameraTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <Circle cx="12" cy="13" r="4" />
+  </Svg>
+);
+
+const NavTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+  </Svg>
+);
+
+const SettingsTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="3" />
+    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </Svg>
+);
+
 export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   onOpenSettings,
 }) => {
+  const [activeTab, setActiveTab] = useState<string>('assistant');
   const [voiceState, setVoiceState] = useState<VoiceState>('READY');
   const [transcript, setTranscript] = useState<string>('');
   const [detectedIntent, setDetectedIntent] = useState<RecognizedIntentType | null>(null);
@@ -107,6 +138,29 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
   const isMountedRef = useRef(true);
   const cameraRef = useRef<any>(null);
+
+  const tabs: TabItem[] = [
+    {
+      id: 'assistant',
+      label: 'Visual AI',
+      icon: VisualTabIcon,
+    },
+    {
+      id: 'perception',
+      label: 'Camera Vision',
+      icon: CameraTabIcon,
+    },
+    {
+      id: 'navigation',
+      label: 'Navigation',
+      icon: NavTabIcon,
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsTabIcon,
+    },
+  ];
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -328,169 +382,196 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
+  const handleSelectTab = (tabId: string) => {
+    if (tabId === 'settings') {
+      onOpenSettings();
+    } else {
+      setActiveTab(tabId);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
       <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* HEADER WITH TITLE & SETTINGS ICON */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[styles.titleIconCircle, { backgroundColor: palette.accentLight }]}>
-                <EyeHeaderIcon color={palette.accentTeal} size={24} />
+      {/* SCREEN CONTAINER BASED ON TAB */}
+      <View style={styles.screenContainer}>
+        {activeTab === 'perception' ? (
+          <ScenePerceptionScreen />
+        ) : activeTab === 'navigation' ? (
+          <VoiceNavigationScreen />
+        ) : (
+          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            {/* HEADER WITH TITLE & SETTINGS ICON */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={[styles.titleIconCircle, { backgroundColor: palette.accentLight }]}>
+                    <EyeHeaderIcon color={palette.accentTeal} size={24} />
+                  </View>
+                  <Text style={[styles.headerTitle, { color: palette.primaryText }]}>Visual Assistant</Text>
+                </View>
+                <Text style={[styles.headerGreeting, { color: palette.secondaryText }]}>Hi. How can I help you?</Text>
               </View>
-              <Text style={[styles.headerTitle, { color: palette.primaryText }]}>Visual Assistant</Text>
+              <TouchableOpacity
+                accessible={true}
+                accessibilityLabel="Open Settings"
+                accessibilityRole="button"
+                onPress={async () => {
+                  await cleanupAllResources();
+                  onOpenSettings();
+                }}
+                style={[styles.settingsIconBtn, { backgroundColor: palette.accentLight }]}
+              >
+                <SettingsGearIcon color={palette.accentTeal} size={22} />
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.headerGreeting, { color: palette.secondaryText }]}>Hi. How can I help you?</Text>
-          </View>
-          <TouchableOpacity
-            accessible={true}
-            accessibilityLabel="Open Settings"
-            accessibilityRole="button"
-            onPress={async () => {
-              await cleanupAllResources();
-              onOpenSettings();
-            }}
-            style={[styles.settingsIconBtn, { backgroundColor: palette.accentLight }]}
-          >
-            <SettingsGearIcon color={palette.accentTeal} size={22} />
-          </TouchableOpacity>
-        </View>
 
-        {/* ACTIVE CAMERA VIEW (WHEN VISION / OCR / CURRENCY ACTIVE) */}
-        {isCameraActive ? (
-          <VisionCameraPreview
-            cameraRef={cameraRef}
-            isActive={isCameraActive}
-            detections={activeDetections}
-          />
-        ) : null}
+            {/* ACTIVE CAMERA VIEW (WHEN VISION / OCR / CURRENCY ACTIVE) */}
+            {isCameraActive ? (
+              <VisionCameraPreview
+                cameraRef={cameraRef}
+                isActive={isCameraActive}
+                detections={activeDetections}
+              />
+            ) : null}
 
-        {/* STATE INDICATOR HUD CARD */}
-        <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
-          <View style={styles.stateIndicatorRow}>
-            <View style={[styles.stateDot, { backgroundColor: palette.accentTeal }]} />
-            <Text style={[styles.stateLabel, { color: palette.accentTeal }]}>STATE: {voiceState}</Text>
-          </View>
-          <Text style={[styles.statusMessage, { color: palette.primaryText }]}>{responseMessage}</Text>
-        </View>
+            {/* STATE INDICATOR HUD CARD */}
+            <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
+              <View style={styles.stateIndicatorRow}>
+                <View style={[styles.stateDot, { backgroundColor: palette.accentTeal }]} />
+                <Text style={[styles.stateLabel, { color: palette.accentTeal }]}>STATE: {voiceState}</Text>
+              </View>
+              <Text style={[styles.statusMessage, { color: palette.primaryText }]}>{responseMessage}</Text>
+            </View>
 
-        {/* LARGE INTERACTIVE VOICE MIC CARD */}
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel={
-            voiceState === 'LISTENING'
-              ? 'Microphone is active. Tap to cancel listening.'
-              : 'Voice assistant. Activate microphone.'
-          }
-          accessibilityRole="button"
-          activeOpacity={0.85}
-          onPress={handleMicrophonePress}
-          style={[
-            styles.micArea,
-            {
-              backgroundColor: '#F4FBFB',
-              borderColor: palette.accentTeal,
-            },
-          ]}
-        >
-          <BigMicWavesIcon color={palette.accentTeal} />
-          <Text style={[styles.micTitle, { color: palette.accentTeal }]}>
-            {voiceState === 'LISTENING'
-              ? 'LISTENING...'
-              : voiceState === 'PROCESSING'
-              ? 'PROCESSING...'
-              : voiceState === 'RESPONDING'
-              ? 'SPEAKING RESPONSE'
-              : voiceState === 'ERROR'
-              ? 'TAP TO RETRY'
-              : 'TAP TO SPEAK'}
-          </Text>
-          <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
-            {voiceState === 'LISTENING'
-              ? 'Say "What\'s in front of me?" or "Describe surroundings"'
-              : 'Tap to start voice interaction'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* RECOGNIZED SPEECH TRANSCRIPT */}
-        {transcript ? (
-          <View style={[styles.transcriptCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
-            <Text style={[styles.transcriptLabel, { color: palette.accentTeal }]}>RECOGNIZED SPEECH:</Text>
-            <Text style={[styles.transcriptText, { color: palette.primaryText }]}>"{transcript}"</Text>
-          </View>
-        ) : null}
-
-        {/* VOICE SIMULATION TRAY */}
-        <View style={[styles.testTray, { backgroundColor: palette.card, borderColor: palette.border }]}>
-          <Text style={[styles.testTrayLabel, { color: palette.secondaryText }]}>
-            TEST VOICE INTERACTION (SIMULATION):
-          </Text>
-          <View style={styles.testChipsRow}>
+            {/* LARGE INTERACTIVE VOICE MIC CARD */}
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying What is in front of me"
+              accessibilityLabel={
+                voiceState === 'LISTENING'
+                  ? 'Microphone is active. Tap to cancel listening.'
+                  : 'Voice assistant. Activate microphone.'
+              }
               accessibilityRole="button"
-              onPress={() => triggerSimulation('What is in front of me?')}
-              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+              activeOpacity={0.85}
+              onPress={handleMicrophonePress}
+              style={[
+                styles.micArea,
+                {
+                  backgroundColor: '#F4FBFB',
+                  borderColor: palette.accentTeal,
+                },
+              ]}
             >
-              <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What's in front of me?"</Text>
+              <BigMicWavesIcon color={palette.accentTeal} />
+              <Text style={[styles.micTitle, { color: palette.accentTeal }]}>
+                {voiceState === 'LISTENING'
+                  ? 'LISTENING...'
+                  : voiceState === 'PROCESSING'
+                  ? 'PROCESSING...'
+                  : voiceState === 'RESPONDING'
+                  ? 'SPEAKING RESPONSE'
+                  : voiceState === 'ERROR'
+                  ? 'TAP TO RETRY'
+                  : 'TAP TO SPEAK'}
+              </Text>
+              <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
+                {voiceState === 'LISTENING'
+                  ? 'Say "What\'s in front of me?" or "Describe surroundings"'
+                  : 'Tap to start voice interaction'}
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Simulate saying Read text"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('Read text')}
-              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-            >
-              <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Read text"</Text>
-            </TouchableOpacity>
+            {/* RECOGNIZED SPEECH TRANSCRIPT */}
+            {transcript ? (
+              <View style={[styles.transcriptCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+                <Text style={[styles.transcriptLabel, { color: palette.accentTeal }]}>RECOGNIZED SPEECH:</Text>
+                <Text style={[styles.transcriptText, { color: palette.primaryText }]}>"{transcript}"</Text>
+              </View>
+            ) : null}
 
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Simulate saying Check currency"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('Check currency')}
-              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-            >
-              <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
-            </TouchableOpacity>
+            {/* VOICE SIMULATION TRAY */}
+            <View style={[styles.testTray, { backgroundColor: palette.card, borderColor: palette.border }]}>
+              <Text style={[styles.testTrayLabel, { color: palette.secondaryText }]}>
+                TEST VOICE INTERACTION (SIMULATION):
+              </Text>
+              <View style={styles.testChipsRow}>
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying What is in front of me"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('What is in front of me?')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What's in front of me?"</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Simulate saying Describe surroundings"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('Describe my surroundings.')}
-              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-            >
-              <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Describe surroundings"</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Read text"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Read text')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Read text"</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Simulate silence timeout"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('__SILENCE__')}
-              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-            >
-              <ClockIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>Silence Timeout</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Check currency"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Check currency')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Describe surroundings"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Describe my surroundings.')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Describe surroundings"</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate silence timeout"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('__SILENCE__')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <ClockIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>Silence Timeout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        )}
+      </View>
+
+      {/* BOTTOM TAB BAR */}
+      <BottomTabBar
+        activeTab={activeTab}
+        tabs={tabs}
+        onSelectTab={handleSelectTab}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  screenContainer: {
     flex: 1,
   },
   content: {

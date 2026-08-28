@@ -10,13 +10,24 @@ import {
 import { useSoundClassifier } from '../../hooks/useSoundClassifier';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { Colors } from '../../theme/colors';
+import { Spacing } from '../../theme/spacing';
 
 interface SoundAlertsScreenProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export const SoundAlertsScreen: React.FC<SoundAlertsScreenProps> = ({ onBack }) => {
   const { recentEvents, triggerDetection } = useSoundClassifier();
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   const handleSimulateSound = (
     category: 'siren' | 'car_horn' | 'fire_alarm' | 'doorbell' | 'knock',
@@ -36,35 +47,34 @@ export const SoundAlertsScreen: React.FC<SoundAlertsScreenProps> = ({ onBack }) 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case 'danger':
-        return { label: 'CRITICAL', bg: Colors.danger, text: '#FAF7F2' };
+        return { label: 'CRITICAL', bg: Colors.danger, text: '#FFFFFF' };
       case 'warning':
-        return { label: 'WARNING', bg: Colors.warning, text: '#121110' };
+        return { label: 'WARNING', bg: Colors.warning, text: '#FFFFFF' };
       default:
-        return { label: 'INFO', bg: Colors.surfaceInteractive, text: Colors.textHighEmphasis };
+        return { label: 'INFO', bg: palette.accentLight, text: palette.accentTeal };
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel="Back to Dashboard"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>🔔 Sound Alerts</Text>
+      <View style={[styles.header, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={[styles.backButtonText, { color: palette.accentTeal }]}>← BACK</Text>
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.headerTitle, { color: palette.primaryText }]}>🔔 Environmental Sound Radar</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* SIMULATE ENVIRONMENTAL SOUNDS */}
-        <Text style={styles.sectionTitle}>SIMULATE ENVIRONMENTAL SOUNDS</Text>
-        <Text style={styles.sectionSubtitle}>
-          Tap any button to trigger environmental sound detection & customized haptic pattern.
-        </Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: palette.accentTeal }]}>SIMULATE ENVIRONMENTAL SOUNDS</Text>
+          <Text style={[styles.sectionSubtitle, { color: palette.secondaryText }]}>
+            Tap any button to trigger environmental sound detection & customized haptic pattern.
+          </Text>
+        </View>
 
         <View style={styles.buttonGrid}>
           <AccessibleButton
@@ -104,32 +114,47 @@ export const SoundAlertsScreen: React.FC<SoundAlertsScreenProps> = ({ onBack }) 
         </View>
 
         {/* DETECTED ALERTS FEED */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>
+        <Text style={[styles.sectionTitle, { color: palette.accentTeal, marginTop: 24 }]}>
           RECENT DETECTIONS ({recentEvents.length})
         </Text>
 
         {recentEvents.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No critical sounds detected yet.</Text>
-            <Text style={styles.emptySubtext}>Microphone is actively monitoring in the background.</Text>
+          <View style={[styles.emptyCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: palette.accentLight }]}>
+              <Text style={{ fontSize: 28 }}>🔔</Text>
+            </View>
+            <Text style={[styles.emptyText, { color: palette.primaryText }]}>No critical sounds detected yet.</Text>
+            <Text style={[styles.emptySubtext, { color: palette.secondaryText }]}>
+              Microphone is actively monitoring ambient sound.
+            </Text>
           </View>
         ) : (
           recentEvents.map((evt) => {
             const badge = getSeverityBadge(evt.severity);
             return (
-              <View key={evt.id} style={styles.eventCard}>
+              <View
+                key={evt.id}
+                style={[
+                  styles.eventCard,
+                  {
+                    backgroundColor: palette.card,
+                    borderColor: palette.border,
+                    borderLeftColor: palette.accentTeal,
+                  },
+                ]}
+              >
                 <View style={styles.eventHeader}>
-                  <Text style={styles.eventName}>{evt.name}</Text>
+                  <Text style={[styles.eventName, { color: palette.primaryText }]}>{evt.name}</Text>
                   <View style={[styles.badge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.badgeText, { color: badge.text }]}>{badge.label}</Text>
                   </View>
                 </View>
 
                 <View style={styles.eventFooter}>
-                  <Text style={styles.eventMeta}>
+                  <Text style={[styles.eventMeta, { color: palette.secondaryText }]}>
                     Level: {evt.decibels} dB • Conf: {Math.round(evt.confidence * 100)}%
                   </Text>
-                  <Text style={styles.eventTime}>{evt.timestamp}</Text>
+                  <Text style={[styles.eventTime, { color: palette.secondaryText }]}>{evt.timestamp}</Text>
                 </View>
               </View>
             );
@@ -143,83 +168,77 @@ export const SoundAlertsScreen: React.FC<SoundAlertsScreenProps> = ({ onBack }) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.surfaceElevated,
     borderBottomWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.surfaceInteractive,
-    borderRadius: 10,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 10,
   },
   backButtonText: {
-    color: Colors.deafBorder,
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 14,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
+  },
+  sectionHeader: {
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: Colors.deafBorder,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 4,
   },
   sectionSubtitle: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginBottom: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
   },
   buttonGrid: {
-    gap: 8,
+    gap: 10,
   },
   emptyCard: {
-    backgroundColor: Colors.surfaceElevated,
     padding: 24,
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
     marginTop: 8,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+  },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   emptyText: {
-    color: Colors.textHighEmphasis,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   emptySubtext: {
-    color: Colors.textMuted,
     fontSize: 13,
     marginTop: 4,
   },
   eventCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginTop: 10,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.deafBorder,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -227,14 +246,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   eventName: {
-    color: Colors.textHighEmphasis,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   badgeText: {
     fontSize: 11,
@@ -246,12 +264,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   eventMeta: {
-    color: Colors.textMediumEmphasis,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   eventTime: {
-    color: Colors.textMuted,
     fontSize: 12,
   },
 });

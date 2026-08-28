@@ -5,136 +5,116 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../theme/colors';
-import { Spacing } from '../../theme/spacing';
-import { AccessibleButton } from '../../components/AccessibleButton';
-import { hapticService } from '../../services/hapticService';
-import { outputService } from '../../services/outputService';
+import { BottomTabBar, TabItem } from '../../components/BottomTabBar';
+import { LiveCaptionsScreen } from './LiveCaptionsScreen';
+import { SoundAlertsScreen } from './SoundAlertsScreen';
+import { DeafDashboardScreen } from './DeafDashboardScreen';
 
 interface HearingDashboardShellProps {
   onOpenSettings: () => void;
 }
 
+const SpeechTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </Svg>
+);
+
+const BellTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <Path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </Svg>
+);
+
+const SosTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M12 8v4M12 16h.01" strokeWidth="3" />
+  </Svg>
+);
+
+const SettingsTabIcon = (color: string) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="3" />
+    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </Svg>
+);
+
 export const HearingDashboardShell: React.FC<HearingDashboardShellProps> = ({
   onOpenSettings,
 }) => {
-  const [feedbackNote, setFeedbackNote] = useState<string>(
-    'Speech captions & sound monitoring will be connected in future phases.'
-  );
+  const [activeTab, setActiveTab] = useState<string>('captions');
 
-  const handleTriggerHapticDemo = async (type: string) => {
-    await hapticService.warning();
-    setFeedbackNote(`Simulated ${type} haptic vibration triggered.`);
-    outputService.broadcastVisualAlert({
-      title: `${type} Test`,
-      message: 'Haptic pattern verified.',
-      severity: 'warning',
-      timestamp: new Date().toLocaleTimeString(),
-    });
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
+
+  const tabs: TabItem[] = [
+    {
+      id: 'captions',
+      label: 'Live Captions',
+      icon: SpeechTabIcon,
+    },
+    {
+      id: 'alerts',
+      label: 'Sound Radar',
+      icon: BellTabIcon,
+    },
+    {
+      id: 'sos',
+      label: 'SOS Alert',
+      icon: SosTabIcon,
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsTabIcon,
+    },
+  ];
+
+  const handleSelectTab = (tabId: string) => {
+    if (tabId === 'settings') {
+      onOpenSettings();
+    } else {
+      setActiveTab(tabId);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>🧏 Hearing Assistant</Text>
-            <Text style={styles.headerSubtitle}>Visual Radar & Live Captions</Text>
-          </View>
-          <TouchableOpacity
-            accessible={true}
-            accessibilityLabel="Open Settings"
-            accessibilityRole="button"
-            onPress={onOpenSettings}
-            style={styles.settingsIconBtn}
-          >
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* FEEDBACK STATUS BANNER */}
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>{feedbackNote}</Text>
-        </View>
-
-        {/* PLACEHOLDER 1: LIVE CAPTIONS CONTAINER */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>💬 LIVE SPEECH CAPTIONS</Text>
-            <View style={styles.badgeTeal}>
-              <Text style={styles.badgeTextTeal}>SHELL READY</Text>
-            </View>
-          </View>
-          <Text style={styles.placeholderBody}>
-            "Spoken conversations will appear here continuously with large, high-contrast readable typography."
-          </Text>
-          <AccessibleButton
-            title="Open Live Captions View"
-            size="normal"
-            variant="teal"
-            onPress={() => setFeedbackNote('Live Captions screen connected to speech engine in Phase 4.')}
+      {/* SCREEN CONTENT */}
+      <View style={styles.screenContainer}>
+        {activeTab === 'captions' ? (
+          <LiveCaptionsScreen />
+        ) : activeTab === 'alerts' ? (
+          <SoundAlertsScreen />
+        ) : (
+          <DeafDashboardScreen
+            onNavigateToCaptions={() => setActiveTab('captions')}
+            onNavigateToAlerts={() => setActiveTab('alerts')}
           />
-        </View>
+        )}
+      </View>
 
-        {/* PLACEHOLDER 2: ENVIRONMENTAL SOUND RADAR */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🔔 ENVIRONMENTAL SOUND RADAR</Text>
-            <View style={styles.badgeAmber}>
-              <Text style={styles.badgeTextAmber}>PASSIVE RADAR</Text>
-            </View>
-          </View>
-          <Text style={styles.placeholderBody}>
-            Ambient sound level, sirens, car horns, fire alarms, and door knocks will be displayed here with multi-sensory color & vibration patterns.
-          </Text>
-
-          <View style={styles.hapticDemoRow}>
-            <AccessibleButton
-              title="🚨 Test Siren Haptic"
-              size="normal"
-              variant="danger"
-              style={styles.halfBtn}
-              onPress={() => handleTriggerHapticDemo('Emergency Siren')}
-            />
-            <AccessibleButton
-              title="🚗 Test Horn Haptic"
-              size="normal"
-              variant="warning"
-              style={styles.halfBtn}
-              onPress={() => handleTriggerHapticDemo('Car Horn')}
-            />
-          </View>
-        </View>
-
-        {/* PLACEHOLDER 3: HAPTIC & SENSOR STATUS */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>⚡ HAPTIC SYSTEM STATUS</Text>
-            <Text style={styles.statusOkText}>ACTIVE ✓</Text>
-          </View>
-          <Text style={styles.placeholderBody}>
-            Physical device vibration actuator configured for distinct alert rhythms.
-          </Text>
-        </View>
-
-        {/* EMERGENCY SOS BUTTON */}
-        <AccessibleButton
-          title="🚨 EMERGENCY SOS"
-          size="large"
-          variant="danger"
-          accessibilityHint="Triggers emergency SOS dispatch"
-          onPress={() => {
-            hapticService.danger();
-            setFeedbackNote('Emergency SOS triggered: 5s countdown modal will dispatch Twilio SMS.');
-          }}
-        />
-      </ScrollView>
+      {/* BOTTOM TAB BAR */}
+      <BottomTabBar
+        activeTab={activeTab}
+        tabs={tabs}
+        onSelectTab={handleSelectTab}
+      />
     </SafeAreaView>
   );
 };
@@ -142,119 +122,8 @@ export const HearingDashboardShell: React.FC<HearingDashboardShellProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
-  content: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxxl,
-    gap: Spacing.md,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.deafBorder,
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    color: Colors.textMediumEmphasis,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  settingsIconBtn: {
-    padding: Spacing.sm,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusSm,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  settingsIcon: {
-    fontSize: 20,
-  },
-  statusBox: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  statusText: {
-    fontSize: 14,
-    color: Colors.textHighEmphasis,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  sectionCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.deafBorder,
-    letterSpacing: 0.5,
-  },
-  badgeTeal: {
-    backgroundColor: Colors.deafSurface,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.deafBorder,
-  },
-  badgeTextTeal: {
-    color: Colors.deafBorder,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  badgeAmber: {
-    backgroundColor: Colors.blindSurface,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.blindBorder,
-  },
-  badgeTextAmber: {
-    color: Colors.blindPrimary,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  statusOkText: {
-    color: Colors.success,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  placeholderBody: {
-    fontSize: 15,
-    color: Colors.textMediumEmphasis,
-    lineHeight: 22,
-    fontWeight: '500',
-    marginBottom: Spacing.md,
-  },
-  hapticDemoRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  halfBtn: {
+  screenContainer: {
     flex: 1,
   },
 });

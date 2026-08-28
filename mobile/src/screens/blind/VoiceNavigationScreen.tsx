@@ -15,10 +15,11 @@ import { NavigationRoute } from '../../types';
 import { outputService } from '../../services/outputService';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { Colors } from '../../theme/colors';
+import { Spacing } from '../../theme/spacing';
 
 interface VoiceNavigationScreenProps {
-  onBack: () => void;
-  onOpenObstacleCamera: () => void;
+  onBack?: () => void;
+  onOpenObstacleCamera?: () => void;
 }
 
 export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
@@ -31,6 +32,16 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
   const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
   const [activeRoute, setActiveRoute] = useState<NavigationRoute | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   const handleSearch = async (queryToSearch: string) => {
     if (!queryToSearch.trim()) return;
@@ -95,39 +106,36 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel="Back to Dashboard"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>🧭 Voice Navigation</Text>
+      <View style={[styles.header, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={[styles.backButtonText, { color: palette.accentTeal }]}>← BACK</Text>
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.headerTitle, { color: palette.primaryText }]}>🧭 Voice Navigation</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* ACTIVE ROUTE GUIDANCE HUD */}
         {activeRoute ? (
           <View style={styles.activeRouteContainer}>
-            <View style={styles.destinationCard}>
-              <Text style={styles.destLabel}>NAVIGATING TO</Text>
-              <Text style={styles.destName}>{activeRoute.destinationName}</Text>
-              <Text style={styles.destMeta}>
+            <View style={[styles.destinationCard, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}>
+              <Text style={[styles.destLabel, { color: palette.accentTeal }]}>NAVIGATING TO</Text>
+              <Text style={[styles.destName, { color: palette.primaryText }]}>{activeRoute.destinationName}</Text>
+              <Text style={[styles.destMeta, { color: palette.secondaryText }]}>
                 Distance: {activeRoute.totalDistanceMeters}m • Step {currentStepIndex + 1} of {activeRoute.steps.length}
               </Text>
             </View>
 
             {/* CURRENT STEP BOX */}
-            <View style={styles.currentStepCard}>
-              <Text style={styles.stepBadge}>CURRENT INSTRUCTION</Text>
-              <Text style={styles.stepInstruction}>
+            <View style={[styles.currentStepCard, { backgroundColor: '#F4FBFB', borderColor: palette.accentTeal }]}>
+              <Text style={[styles.stepBadge, { color: palette.accentTeal }]}>CURRENT INSTRUCTION</Text>
+              <Text style={[styles.stepInstruction, { color: palette.primaryText }]}>
                 {activeRoute.steps[currentStepIndex]?.instruction || 'Proceed along path.'}
               </Text>
-              <Text style={styles.stepDistance}>
+              <Text style={[styles.stepDistance, { color: palette.secondaryText }]}>
                 Remaining: {activeRoute.steps[currentStepIndex]?.distanceMeters} meters
               </Text>
             </View>
@@ -143,16 +151,18 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
               <AccessibleButton
                 title="➡️ Next Step"
                 size="large"
-                variant="primary"
+                variant="teal"
                 onPress={handleNextStep}
               />
 
-              <AccessibleButton
-                title="📷 Check Path Obstacles"
-                size="normal"
-                variant="secondary"
-                onPress={onOpenObstacleCamera}
-              />
+              {onOpenObstacleCamera ? (
+                <AccessibleButton
+                  title="📷 Check Path Obstacles"
+                  size="normal"
+                  variant="secondary"
+                  onPress={onOpenObstacleCamera}
+                />
+              ) : null}
 
               <AccessibleButton
                 title="❌ End Navigation"
@@ -168,12 +178,12 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
         ) : (
           /* PLACE SEARCH & PRESETS */
           <View>
-            <Text style={styles.sectionLabel}>ENTER DESTINATION</Text>
+            <Text style={[styles.sectionLabel, { color: palette.accentTeal }]}>ENTER DESTINATION</Text>
             <View style={styles.searchRow}>
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { backgroundColor: palette.card, color: palette.primaryText, borderColor: palette.border }]}
                 placeholder="e.g. Hospital, Pharmacy, Station"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={palette.secondaryText}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onSubmitEditing={() => handleSearch(searchQuery)}
@@ -182,7 +192,7 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
               />
               <TouchableOpacity
                 onPress={() => handleSearch(searchQuery)}
-                style={styles.searchButton}
+                style={[styles.searchButton, { backgroundColor: palette.accentTeal }]}
                 accessible={true}
                 accessibilityLabel="Search"
               >
@@ -192,13 +202,13 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
 
             {isSearching && (
               <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={Colors.blindPrimary} />
-                <Text style={styles.loadingText}>Fetching route & places...</Text>
+                <ActivityIndicator size="large" color={palette.accentTeal} />
+                <Text style={[styles.loadingText, { color: palette.secondaryText }]}>Fetching route & places...</Text>
               </View>
             )}
 
             {/* PRESET QUICK DESTINATIONS */}
-            <Text style={styles.sectionLabel}>QUICK DESTINATIONS</Text>
+            <Text style={[styles.sectionLabel, { color: palette.accentTeal }]}>QUICK DESTINATIONS</Text>
             <View style={styles.quickGrid}>
               <AccessibleButton
                 title="🏥 Nearest Hospital"
@@ -220,7 +230,7 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
               />
               <AccessibleButton
                 title="🏠 Safe Zone / Home"
-                variant="primary"
+                variant="teal"
                 size="normal"
                 onPress={() => handleSearch('Home')}
               />
@@ -229,17 +239,17 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
             {/* SEARCH RESULTS LIST */}
             {searchResults.length > 0 && (
               <View style={styles.resultsList}>
-                <Text style={styles.sectionLabel}>SEARCH RESULTS</Text>
+                <Text style={[styles.sectionLabel, { color: palette.accentTeal }]}>SEARCH RESULTS</Text>
                 {searchResults.map((place, idx) => (
                   <TouchableOpacity
                     key={idx}
                     accessible={true}
                     accessibilityLabel={`Route to ${place.name}`}
-                    style={styles.resultItem}
+                    style={[styles.resultItem, { backgroundColor: palette.card, borderColor: palette.border, borderLeftColor: palette.accentTeal }]}
                     onPress={() => handleSelectDestination(place)}
                   >
-                    <Text style={styles.resultName}>{place.name}</Text>
-                    <Text style={styles.resultAddress} numberOfLines={2}>
+                    <Text style={[styles.resultName, { color: palette.primaryText }]}>{place.name}</Text>
+                    <Text style={[styles.resultAddress, { color: palette.secondaryText }]} numberOfLines={2}>
                       {place.displayName}
                     </Text>
                   </TouchableOpacity>
@@ -256,47 +266,37 @@ export const VoiceNavigationScreen: React.FC<VoiceNavigationScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.surfaceElevated,
     borderBottomWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.surfaceInteractive,
-    borderRadius: 10,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 10,
   },
   backButtonText: {
-    color: Colors.blindPrimary,
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 14,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
     flex: 1,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: Colors.blindPrimary,
-    letterSpacing: 0.5,
-    marginTop: 16,
+    letterSpacing: 0.6,
+    marginTop: 14,
     marginBottom: 8,
   },
   searchRow: {
@@ -305,59 +305,49 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: Colors.textHighEmphasis,
+    paddingVertical: 12,
     fontSize: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
+    borderWidth: 1,
   },
   searchButton: {
-    backgroundColor: Colors.blindPrimary,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 14,
   },
   searchButtonText: {
-    color: '#121110',
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 14,
   },
   loadingBox: {
-    marginVertical: 20,
+    marginVertical: 16,
     alignItems: 'center',
   },
   loadingText: {
-    color: Colors.textMediumEmphasis,
-    marginTop: 8,
-    fontSize: 15,
+    marginTop: 6,
+    fontSize: 14,
   },
   quickGrid: {
-    gap: 6,
+    gap: 8,
   },
   resultsList: {
-    marginTop: 16,
+    marginTop: 14,
   },
   resultItem: {
-    backgroundColor: Colors.surfaceElevated,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.blindPrimary,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   resultName: {
-    color: Colors.textHighEmphasis,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   resultAddress: {
-    color: Colors.textMuted,
     fontSize: 13,
     marginTop: 4,
   },
@@ -365,55 +355,46 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   destinationCard: {
-    backgroundColor: Colors.surfaceElevated,
     padding: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: Colors.blindBorder,
+    borderRadius: 18,
+    borderWidth: 1.5,
   },
   destLabel: {
-    color: Colors.blindPrimary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
+    letterSpacing: 0.6,
   },
   destName: {
-    color: Colors.textHighEmphasis,
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     marginVertical: 4,
   },
   destMeta: {
-    color: Colors.textMediumEmphasis,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   currentStepCard: {
-    backgroundColor: Colors.surfaceInteractive,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: Colors.borderSubtle,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1.5,
   },
   stepBadge: {
-    color: Colors.blindPrimary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   stepInstruction: {
-    color: Colors.textHighEmphasis,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    marginVertical: 8,
-    lineHeight: 28,
+    marginVertical: 6,
+    lineHeight: 26,
   },
   stepDistance: {
-    color: Colors.textMediumEmphasis,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
   },
   navActionButtons: {
     gap: 8,
-    marginTop: 8,
+    marginTop: 4,
   },
 });

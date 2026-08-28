@@ -11,9 +11,10 @@ import { useAccessibility } from '../../context/AccessibilityContext';
 import { useLocationContext } from '../../context/LocationContext';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { Colors } from '../../theme/colors';
+import { Spacing } from '../../theme/spacing';
 
 interface GuardianDashboardProps {
-  onSwitchMode: () => void;
+  onSwitchMode?: () => void;
 }
 
 export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSwitchMode }) => {
@@ -22,6 +23,16 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
     useLocationContext();
 
   const [radius, setRadius] = useState<number>(userProfile.safeZoneRadiusMeters || 50);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   const handleSetCurrentAsSafeCenter = () => {
     if (currentLocation) {
@@ -35,28 +46,34 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>🛡️ Guardian Monitor</Text>
-          <Text style={styles.statusText}>Monitoring: {userProfile.name}</Text>
+          <Text style={[styles.headerTitle, { color: palette.primaryText }]}>🛡️ Guardian Monitor</Text>
+          <Text style={[styles.statusText, { color: palette.secondaryText }]}>
+            Monitoring: {userProfile.name || userProfile.fullName || 'Assisted User'}
+          </Text>
         </View>
 
         {/* ASSISTED USER TELEMETRY CARD */}
-        <View style={styles.telemetryCard}>
+        <View style={[styles.telemetryCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
           <View style={styles.telemetryHeader}>
-            <Text style={styles.cardTitle}>LIVE ASSISTED USER STATUS</Text>
+            <Text style={[styles.cardTitle, { color: palette.accentTeal }]}>LIVE ASSISTED USER STATUS</Text>
             <View
               style={[
                 styles.statusBadge,
-                isInsideSafeZone ? styles.statusBadgeSafe : styles.statusBadgeBreach,
+                isInsideSafeZone
+                  ? { backgroundColor: palette.accentLight }
+                  : { backgroundColor: '#FEF2F2' },
               ]}
             >
               <Text
                 style={[
                   styles.statusBadgeText,
-                  isInsideSafeZone ? styles.textSafe : styles.textBreach,
+                  isInsideSafeZone
+                    ? { color: palette.accentTeal }
+                    : { color: '#EF4444' },
                 ]}
               >
                 {isInsideSafeZone ? '✓ INSIDE SAFE ZONE' : '⚠️ OUT OF SAFE ZONE'}
@@ -65,30 +82,30 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
           </View>
 
           <View style={styles.metricsGrid}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>LATITUDE</Text>
-              <Text style={styles.metricValue}>
+            <View style={[styles.metricBox, { backgroundColor: '#F4FBFB', borderColor: palette.border }]}>
+              <Text style={[styles.metricLabel, { color: palette.secondaryText }]}>LATITUDE</Text>
+              <Text style={[styles.metricValue, { color: palette.primaryText }]}>
                 {currentLocation?.coords?.latitude?.toFixed(5) || '12.97160'}
               </Text>
             </View>
 
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>LONGITUDE</Text>
-              <Text style={styles.metricValue}>
+            <View style={[styles.metricBox, { backgroundColor: '#F4FBFB', borderColor: palette.border }]}>
+              <Text style={[styles.metricLabel, { color: palette.secondaryText }]}>LONGITUDE</Text>
+              <Text style={[styles.metricValue, { color: palette.primaryText }]}>
                 {currentLocation?.coords?.longitude?.toFixed(5) || '77.59460'}
               </Text>
             </View>
 
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>DIST. FROM CENTER</Text>
-              <Text style={styles.metricValue}>
+            <View style={[styles.metricBox, { backgroundColor: '#F4FBFB', borderColor: palette.border }]}>
+              <Text style={[styles.metricLabel, { color: palette.secondaryText }]}>DIST. FROM CENTER</Text>
+              <Text style={[styles.metricValue, { color: palette.primaryText }]}>
                 {distanceFromSafeZoneCenter !== null ? `${distanceFromSafeZoneCenter} m` : '0 m'}
               </Text>
             </View>
 
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>GPS ACCURACY</Text>
-              <Text style={styles.metricValue}>
+            <View style={[styles.metricBox, { backgroundColor: '#F4FBFB', borderColor: palette.border }]}>
+              <Text style={[styles.metricLabel, { color: palette.secondaryText }]}>GPS ACCURACY</Text>
+              <Text style={[styles.metricValue, { color: palette.primaryText }]}>
                 ±{Math.round(currentLocation?.coords?.accuracy || 8)} m
               </Text>
             </View>
@@ -96,22 +113,32 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
         </View>
 
         {/* SAFE ZONE GEOFENCE CONFIGURATOR */}
-        <View style={styles.safeZoneCard}>
-          <Text style={styles.cardTitle}>CONFIGURABLE SAFE ZONE</Text>
-          <Text style={styles.cardSubtitle}>
+        <View style={[styles.safeZoneCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.cardTitle, { color: palette.accentTeal }]}>CONFIGURABLE SAFE ZONE</Text>
+          <Text style={[styles.cardSubtitle, { color: palette.secondaryText }]}>
             Alerts guardian immediately if user steps beyond the configured safe radius.
           </Text>
 
           <View style={styles.radiusSelector}>
-            <Text style={styles.radiusLabel}>SAFE RADIUS: {radius} METERS</Text>
+            <Text style={[styles.radiusLabel, { color: palette.primaryText }]}>SAFE RADIUS: {radius} METERS</Text>
             <View style={styles.radiusChips}>
               {[30, 50, 100, 200, 500].map((r) => (
                 <TouchableOpacity
                   key={r}
                   onPress={() => handleRadiusChange(r)}
-                  style={[styles.radiusChip, radius === r && styles.radiusChipActive]}
+                  style={[
+                    styles.radiusChip,
+                    radius === r
+                      ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+                      : { backgroundColor: palette.background, borderColor: palette.border },
+                  ]}
                 >
-                  <Text style={[styles.radiusChipText, radius === r && styles.radiusChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.radiusChipText,
+                      { color: radius === r ? '#FFFFFF' : palette.primaryText },
+                    ]}
+                  >
                     {r}m
                   </Text>
                 </TouchableOpacity>
@@ -128,26 +155,34 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
         </View>
 
         {/* EMERGENCY CONTACTS LIST */}
-        <View style={styles.contactsCard}>
-          <Text style={styles.cardTitle}>EMERGENCY SMS RECIPIENTS</Text>
-          {(userProfile.emergencyContacts || [userProfile.emergencyContact]).map((contact) => (
-            <View key={contact.id} style={styles.contactItem}>
-              <Text style={styles.contactName}>{contact.name} ({contact.relation || 'Contact'})</Text>
-              <Text style={styles.contactPhone}>{contact.phone}</Text>
+        <View style={[styles.contactsCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.cardTitle, { color: palette.accentTeal }]}>EMERGENCY SMS RECIPIENTS</Text>
+          {(userProfile.emergencyContacts || [userProfile.emergencyContact]).map((contact, i) => (
+            <View key={contact?.id || i} style={[styles.contactItem, { backgroundColor: '#F4FBFB', borderColor: palette.border }]}>
+              <Text style={[styles.contactName, { color: palette.primaryText }]}>
+                {contact?.name || 'Contact'} ({contact?.relation || contact?.relationship || 'Family'})
+              </Text>
+              <Text style={[styles.contactPhone, { color: palette.secondaryText }]}>
+                {contact?.phone || contact?.phoneNumber || 'Not provided'}
+              </Text>
             </View>
           ))}
         </View>
 
         {/* FOOTER SWITCH MODE */}
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel="Switch Accessibility Mode"
-          accessibilityRole="button"
-          onPress={onSwitchMode}
-          style={styles.switchModeButton}
-        >
-          <Text style={styles.switchModeText}>🔄 Switch to Blind / Deaf User Mode</Text>
-        </TouchableOpacity>
+        {onSwitchMode ? (
+          <TouchableOpacity
+            accessible={true}
+            accessibilityLabel="Switch Accessibility Mode"
+            accessibilityRole="button"
+            onPress={onSwitchMode}
+            style={[styles.switchModeButton, { borderColor: palette.border }]}
+          >
+            <Text style={[styles.switchModeText, { color: palette.secondaryText }]}>
+              🔄 Switch Mode (Visual / Hearing)
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -156,34 +191,35 @@ export const GuardianDashboardScreen: React.FC<GuardianDashboardProps> = ({ onSw
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxxl,
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
   statusText: {
     fontSize: 15,
-    color: Colors.textMuted,
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   telemetryCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    shadowColor: '#0F9D9A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
   },
   telemetryHeader: {
     flexDirection: 'row',
@@ -192,13 +228,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardTitle: {
-    color: Colors.textHighEmphasis,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   cardSubtitle: {
-    color: Colors.textMuted,
     fontSize: 13,
     marginVertical: 6,
     lineHeight: 18,
@@ -206,62 +240,43 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusBadgeSafe: {
-    backgroundColor: '#143820',
-  },
-  statusBadgeBreach: {
-    backgroundColor: '#450A0A',
+    borderRadius: 12,
   },
   statusBadgeText: {
     fontSize: 11,
     fontWeight: '800',
   },
-  textSafe: {
-    color: '#86EFAC',
-  },
-  textBreach: {
-    color: '#FECACA',
-  },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   metricBox: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: Colors.surfaceInteractive,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   metricLabel: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
   },
   metricValue: {
-    color: Colors.textHighEmphasis,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     marginTop: 4,
   },
   safeZoneCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   radiusSelector: {
     marginVertical: 12,
   },
   radiusLabel: {
-    color: Colors.textHighEmphasis,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 8,
@@ -272,62 +287,43 @@ const styles = StyleSheet.create({
   },
   radiusChip: {
     flex: 1,
-    backgroundColor: Colors.surfaceInteractive,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  radiusChipActive: {
-    backgroundColor: Colors.blindPrimary,
-    borderColor: Colors.blindBorder,
   },
   radiusChipText: {
-    color: Colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
-  radiusChipTextActive: {
-    color: '#121110',
-    fontWeight: '800',
-  },
   contactsCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   contactItem: {
-    backgroundColor: Colors.surfaceInteractive,
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 14,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   contactName: {
-    color: Colors.textHighEmphasis,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   contactPhone: {
-    color: Colors.textMediumEmphasis,
     fontSize: 13,
     marginTop: 2,
   },
   switchModeButton: {
     marginTop: 10,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   switchModeText: {
-    color: Colors.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

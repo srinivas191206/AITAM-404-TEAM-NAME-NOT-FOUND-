@@ -12,10 +12,11 @@ import { aiVisionService, VisionTaskType, VisionAnalysisResult } from '../../ser
 import { outputService } from '../../services/outputService';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { Colors } from '../../theme/colors';
+import { Spacing } from '../../theme/spacing';
 
 interface ScenePerceptionScreenProps {
   initialTask?: VisionTaskType;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export const ScenePerceptionScreen: React.FC<ScenePerceptionScreenProps> = ({
@@ -25,6 +26,16 @@ export const ScenePerceptionScreen: React.FC<ScenePerceptionScreenProps> = ({
   const [currentTask, setCurrentTask] = useState<VisionTaskType>(initialTask);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<VisionAnalysisResult | null>(null);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   useEffect(() => {
     outputService.announce(
@@ -66,54 +77,91 @@ export const ScenePerceptionScreen: React.FC<ScenePerceptionScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel="Back to Dashboard"
-          onPress={onBack}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{getTaskDisplayName(currentTask)}</Text>
+      <View style={[styles.header, { backgroundColor: palette.card, borderColor: palette.border }]}>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={[styles.backButtonText, { color: palette.accentTeal }]}>← BACK</Text>
+          </TouchableOpacity>
+        ) : null}
+        <Text style={[styles.headerTitle, { color: palette.primaryText }]}>{getTaskDisplayName(currentTask)}</Text>
       </View>
 
       {/* TASK SWITCHER BAR */}
-      <View style={styles.taskSwitcher}>
+      <View style={[styles.taskSwitcher, { backgroundColor: palette.card, borderColor: palette.border }]}>
         <TouchableOpacity
           onPress={() => setCurrentTask('scene_description')}
-          style={[styles.taskChip, currentTask === 'scene_description' && styles.taskChipActive]}
+          style={[
+            styles.taskChip,
+            currentTask === 'scene_description'
+              ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+              : { backgroundColor: palette.background, borderColor: palette.border },
+          ]}
         >
-          <Text style={[styles.taskChipText, currentTask === 'scene_description' && styles.taskChipTextActive]}>
+          <Text
+            style={[
+              styles.taskChipText,
+              { color: currentTask === 'scene_description' ? '#FFFFFF' : palette.primaryText },
+            ]}
+          >
             🔍 Scene
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setCurrentTask('ocr_text')}
-          style={[styles.taskChip, currentTask === 'ocr_text' && styles.taskChipActive]}
+          style={[
+            styles.taskChip,
+            currentTask === 'ocr_text'
+              ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+              : { backgroundColor: palette.background, borderColor: palette.border },
+          ]}
         >
-          <Text style={[styles.taskChipText, currentTask === 'ocr_text' && styles.taskChipTextActive]}>
+          <Text
+            style={[
+              styles.taskChipText,
+              { color: currentTask === 'ocr_text' ? '#FFFFFF' : palette.primaryText },
+            ]}
+          >
             📄 Read Text
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setCurrentTask('currency_recognition')}
-          style={[styles.taskChip, currentTask === 'currency_recognition' && styles.taskChipActive]}
+          style={[
+            styles.taskChip,
+            currentTask === 'currency_recognition'
+              ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+              : { backgroundColor: palette.background, borderColor: palette.border },
+          ]}
         >
-          <Text style={[styles.taskChipText, currentTask === 'currency_recognition' && styles.taskChipTextActive]}>
+          <Text
+            style={[
+              styles.taskChipText,
+              { color: currentTask === 'currency_recognition' ? '#FFFFFF' : palette.primaryText },
+            ]}
+          >
             💵 Currency
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setCurrentTask('obstacle_detection')}
-          style={[styles.taskChip, currentTask === 'obstacle_detection' && styles.taskChipActive]}
+          style={[
+            styles.taskChip,
+            currentTask === 'obstacle_detection'
+              ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+              : { backgroundColor: palette.background, borderColor: palette.border },
+          ]}
         >
-          <Text style={[styles.taskChipText, currentTask === 'obstacle_detection' && styles.taskChipTextActive]}>
+          <Text
+            style={[
+              styles.taskChipText,
+              { color: currentTask === 'obstacle_detection' ? '#FFFFFF' : palette.primaryText },
+            ]}
+          >
             ⚠️ Obstacles
           </Text>
         </TouchableOpacity>
@@ -129,21 +177,23 @@ export const ScenePerceptionScreen: React.FC<ScenePerceptionScreenProps> = ({
       </View>
 
       {/* RESULT CARD */}
-      {result && (
-        <View style={styles.resultCard}>
+      {result ? (
+        <View style={[styles.resultCard, { backgroundColor: palette.card, borderTopColor: palette.accentTeal }]}>
           <ScrollView style={styles.resultScroll}>
-            <Text style={styles.resultHeader}>ANALYSIS RESULT</Text>
-            <Text style={styles.resultDescription}>{result.primaryDescription}</Text>
+            <Text style={[styles.resultHeader, { color: palette.accentTeal }]}>ANALYSIS RESULT</Text>
+            <Text style={[styles.resultDescription, { color: palette.primaryText }]}>
+              {result.primaryDescription}
+            </Text>
           </ScrollView>
 
           <AccessibleButton
             title="🔊 Repeat Description"
             size="normal"
-            variant="primary"
+            variant="teal"
             onPress={() => outputService.announce(result.primaryDescription, 'high')}
           />
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -151,72 +201,51 @@ export const ScenePerceptionScreen: React.FC<ScenePerceptionScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.surfaceElevated,
     borderBottomWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.surfaceInteractive,
-    borderRadius: 10,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 10,
   },
   backButtonText: {
-    color: Colors.blindPrimary,
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 14,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
     flex: 1,
   },
   taskSwitcher: {
     flexDirection: 'row',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: Colors.surfaceInteractive,
+    borderBottomWidth: 1,
     gap: 8,
   },
   taskChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  taskChipActive: {
-    backgroundColor: Colors.blindPrimary,
-    borderColor: Colors.blindBorder,
   },
   taskChipText: {
-    color: Colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
-  },
-  taskChipTextActive: {
-    color: '#121110',
   },
   cameraContainer: {
     flex: 1,
   },
   resultCard: {
     maxHeight: 220,
-    backgroundColor: Colors.surfaceElevated,
     borderTopWidth: 3,
-    borderColor: Colors.blindPrimary,
     padding: 16,
   },
   resultScroll: {
@@ -224,16 +253,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   resultHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: Colors.blindPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: 4,
   },
   resultDescription: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.textHighEmphasis,
-    lineHeight: 24,
+    lineHeight: 22,
   },
 });

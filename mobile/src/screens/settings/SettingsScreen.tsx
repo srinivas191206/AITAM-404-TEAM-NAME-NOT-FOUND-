@@ -14,6 +14,7 @@ import { Spacing } from '../../theme/spacing';
 import { AppHeader } from '../../components/AppHeader';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
+import { ttsService } from '../../services/ttsService';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -32,43 +33,66 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const primaryContact =
     userProfile.emergencyContact || userProfile.emergencyContacts?.[0];
 
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
+
   const handleReset = async () => {
     await resetOnboarding();
     outputService.announce('Application reset. Returning to welcome screen.');
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
-      <AppHeader title="Settings & Setup" onBack={onBack} />
+  const handleLanguageChange = (langCode: 'en' | 'te' | 'hi' | 'ta' | 'es' | 'fr') => {
+    setLanguage(langCode);
+    ttsService.setLanguage(langCode);
+    const feedback = ttsService.translateKey('ready', langCode);
+    outputService.announce(feedback, 'high');
+  };
 
-      <ScrollView contentContainerStyle={styles.content}>
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
+      <AppHeader title="Settings & Setup" onBack={onBack} lightMode={true} />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* SECTION 1: USER PROFILE SUMMARY */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>USER PROFILE</Text>
+        <View style={[styles.sectionCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.sectionTitle, { color: palette.accentTeal }]}>USER PROFILE</Text>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Name:</Text>
-            <Text style={styles.infoValue}>{userProfile.fullName || userProfile.name || 'Assisted User'}</Text>
+            <Text style={[styles.infoLabel, { color: palette.secondaryText }]}>Name:</Text>
+            <Text style={[styles.infoValue, { color: palette.primaryText }]}>
+              {userProfile.fullName || userProfile.name || 'Assisted User'}
+            </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{userProfile.phoneNumber || userProfile.phone || 'Not specified'}</Text>
+            <Text style={[styles.infoLabel, { color: palette.secondaryText }]}>Phone:</Text>
+            <Text style={[styles.infoValue, { color: palette.primaryText }]}>
+              {userProfile.phoneNumber || userProfile.phone || 'Not specified'}
+            </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Address:</Text>
-            <Text style={styles.infoValue}>{userProfile.address || 'Not specified'}</Text>
+            <Text style={[styles.infoLabel, { color: palette.secondaryText }]}>Address:</Text>
+            <Text style={[styles.infoValue, { color: palette.primaryText }]}>
+              {userProfile.address || 'Not specified'}
+            </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Emergency Contact:</Text>
-            <Text style={styles.infoValue}>
+            <Text style={[styles.infoLabel, { color: palette.secondaryText }]}>Emergency Contact:</Text>
+            <Text style={[styles.infoValue, { color: palette.primaryText }]}>
               {primaryContact?.name
                 ? `${primaryContact.name} (${primaryContact.phoneNumber || primaryContact.phone})`
                 : 'Not configured'}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Guardian Status:</Text>
-            <Text style={styles.infoValue}>
+            <Text style={[styles.infoLabel, { color: palette.secondaryText }]}>Guardian Status:</Text>
+            <Text style={[styles.infoValue, { color: palette.primaryText }]}>
               {userProfile.guardian?.guardianLinked || userProfile.guardianLinked
                 ? '✓ Linked'
                 : 'Set Up Later'}
@@ -77,17 +101,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         </View>
 
         {/* SECTION 2: ACCESSIBILITY MODE SWITCHER */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>ACTIVE ACCESSIBILITY MODE</Text>
+        <View style={[styles.sectionCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.sectionTitle, { color: palette.accentTeal }]}>ACTIVE ACCESSIBILITY MODE</Text>
           <View style={styles.modeButtonsRow}>
             <TouchableOpacity
               onPress={() => setMode('blind')}
-              style={[styles.modeChip, activeMode === 'blind' && styles.modeChipActiveAmber]}
+              style={[
+                styles.modeChip,
+                activeMode === 'blind'
+                  ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+                  : { backgroundColor: palette.background, borderColor: palette.border },
+              ]}
             >
               <Text
                 style={[
                   styles.modeChipText,
-                  activeMode === 'blind' && styles.modeChipTextActiveDark,
+                  { color: activeMode === 'blind' ? '#FFFFFF' : palette.primaryText },
                 ]}
               >
                 👁️ Visual Assist
@@ -96,12 +125,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 
             <TouchableOpacity
               onPress={() => setMode('deaf')}
-              style={[styles.modeChip, activeMode === 'deaf' && styles.modeChipActiveTeal]}
+              style={[
+                styles.modeChip,
+                activeMode === 'deaf'
+                  ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+                  : { backgroundColor: palette.background, borderColor: palette.border },
+              ]}
             >
               <Text
                 style={[
                   styles.modeChipText,
-                  activeMode === 'deaf' && styles.modeChipTextActiveLight,
+                  { color: activeMode === 'deaf' ? '#FFFFFF' : palette.primaryText },
                 ]}
               >
                 🧏 Hearing Assist
@@ -110,12 +144,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 
             <TouchableOpacity
               onPress={() => setMode('guardian')}
-              style={[styles.modeChip, activeMode === 'guardian' && styles.modeChipActiveSlate]}
+              style={[
+                styles.modeChip,
+                activeMode === 'guardian'
+                  ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+                  : { backgroundColor: palette.background, borderColor: palette.border },
+              ]}
             >
               <Text
                 style={[
                   styles.modeChipText,
-                  activeMode === 'guardian' && styles.modeChipTextActiveLight,
+                  { color: activeMode === 'guardian' ? '#FFFFFF' : palette.primaryText },
                 ]}
               >
                 🛡️ Guardian
@@ -124,34 +163,44 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           </View>
         </View>
 
-        {/* SECTION 3: LANGUAGE SWITCHER */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>LANGUAGE</Text>
+        {/* SECTION 3: LANGUAGE SWITCHER WITH INDIAN ACCENT / VOICE SUPPORT */}
+        <View style={[styles.sectionCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.sectionTitle, { color: palette.accentTeal }]}>SYSTEM LANGUAGE & VOICE (INDIAN ACCENT)</Text>
           <View style={styles.modeButtonsRow}>
-            {(['en', 'te', 'hi', 'ta', 'es', 'fr'] as const).map((langCode) => (
+            {[
+              { code: 'en', label: 'English (en-IN)' },
+              { code: 'hi', label: 'Hindi (hi-IN)' },
+              { code: 'te', label: 'Telugu (te-IN)' },
+              { code: 'ta', label: 'Tamil (ta-IN)' },
+            ].map(({ code, label }) => (
               <TouchableOpacity
-                key={langCode}
-                onPress={() => setLanguage(langCode)}
-                style={[styles.modeChip, selectedLanguage === langCode && styles.modeChipActiveAmber]}
+                key={code}
+                onPress={() => handleLanguageChange(code as any)}
+                style={[
+                  styles.modeChip,
+                  selectedLanguage === code
+                    ? { backgroundColor: palette.accentTeal, borderColor: palette.accentTeal }
+                    : { backgroundColor: palette.background, borderColor: palette.border },
+                ]}
               >
                 <Text
                   style={[
                     styles.modeChipText,
-                    selectedLanguage === langCode && styles.modeChipTextActiveDark,
+                    { color: selectedLanguage === code ? '#FFFFFF' : palette.primaryText },
                   ]}
                 >
-                  {langCode.toUpperCase()}
+                  {label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* SECTION 4: RE-RUN ONBOARDING / RESET APP */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>DEVELOPER & TESTING TOOLS</Text>
-          <Text style={styles.cardDesc}>
-            Test the complete first-time onboarding and voice/visual registration from scratch:
+        {/* SECTION 4: RESET APP */}
+        <View style={[styles.sectionCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.sectionTitle, { color: palette.accentTeal }]}>DEVELOPER & TESTING TOOLS</Text>
+          <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
+            Test first-time onboarding and registration from scratch:
           </Text>
 
           <AccessibleButton
@@ -164,9 +213,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 
         {/* APP INFO */}
         <View style={styles.appInfoBox}>
-          <Text style={styles.appInfoTitle}>Access+ Mobile v1.0.0</Text>
-          <Text style={styles.appInfoDesc}>
-            Phase 3: Registration, Local User Profile & Emergency Contact Setup
+          <Text style={[styles.appInfoTitle, { color: palette.primaryText }]}>Access+ Mobile v1.0.0</Text>
+          <Text style={[styles.appInfoDesc, { color: palette.secondaryText }]}>
+            Teal & Slate Accessibility Architecture (All Phases 1–12 Integrated)
           </Text>
         </View>
       </ScrollView>
@@ -177,42 +226,37 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   content: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xxxl,
-    gap: Spacing.md,
+    gap: 14,
   },
   sectionCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.md,
+    letterSpacing: 0.6,
+    marginBottom: 12,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.xs + 2,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderColor: Colors.surfaceInteractive,
+    borderColor: '#F1F5F9',
   },
   infoLabel: {
     fontSize: 14,
-    color: Colors.textMuted,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   infoValue: {
     fontSize: 14,
-    color: Colors.textHighEmphasis,
     fontWeight: '700',
     maxWidth: '65%',
     textAlign: 'right',
@@ -220,59 +264,33 @@ const styles = StyleSheet.create({
   modeButtonsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
+    gap: 8,
   },
   modeChip: {
-    backgroundColor: Colors.surfaceInteractive,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Spacing.radiusMd,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  modeChipActiveAmber: {
-    backgroundColor: Colors.blindPrimary,
-    borderColor: Colors.blindBorder,
-  },
-  modeChipActiveTeal: {
-    backgroundColor: Colors.deafPrimary,
-    borderColor: Colors.deafBorder,
-  },
-  modeChipActiveSlate: {
-    backgroundColor: Colors.guardianPrimary,
-    borderColor: Colors.guardianAccent,
   },
   modeChipText: {
-    fontSize: 14,
-    color: Colors.textMuted,
+    fontSize: 13,
     fontWeight: '700',
-  },
-  modeChipTextActiveDark: {
-    color: '#121110',
-    fontWeight: '800',
-  },
-  modeChipTextActiveLight: {
-    color: '#FAF7F2',
-    fontWeight: '800',
   },
   cardDesc: {
     fontSize: 14,
-    color: Colors.textMediumEmphasis,
     lineHeight: 20,
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
   appInfoBox: {
     alignItems: 'center',
-    paddingVertical: Spacing.lg,
+    paddingVertical: 16,
   },
   appInfoTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
   },
   appInfoDesc: {
     fontSize: 13,
-    color: Colors.textMuted,
     marginTop: 2,
   },
 });

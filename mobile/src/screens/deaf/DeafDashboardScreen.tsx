@@ -11,77 +11,98 @@ import { useAccessibility } from '../../context/AccessibilityContext';
 import { useSoundClassifier } from '../../hooks/useSoundClassifier';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { Colors } from '../../theme/colors';
+import { Spacing } from '../../theme/spacing';
 
 interface DeafDashboardProps {
   onNavigateToCaptions: () => void;
-  onNavigateToSoundAlerts: () => void;
-  onSwitchMode: () => void;
+  onNavigateToAlerts?: () => void;
+  onSwitchMode?: () => void;
 }
 
 export const DeafDashboardScreen: React.FC<DeafDashboardProps> = ({
   onNavigateToCaptions,
-  onNavigateToSoundAlerts,
+  onNavigateToAlerts,
   onSwitchMode,
 }) => {
   const { triggerSos } = useAccessibility();
   const { currentDecibels, activeAlert, startMonitoring } = useSoundClassifier();
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   useEffect(() => {
     startMonitoring();
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* HEADER */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>🧏 Hearing Assistant</Text>
-          <Text style={styles.statusText}>Visual Radar & Sound Monitoring Active</Text>
+          <Text style={[styles.headerTitle, { color: palette.primaryText }]}>🧏 Hearing Assistant</Text>
+          <Text style={[styles.statusText, { color: palette.secondaryText }]}>
+            Visual Radar & Live Captions Active
+          </Text>
         </View>
 
         {/* ACTIVE SOUND ALERT BANNER IF DETECTED */}
-        {activeAlert && (
+        {activeAlert ? (
           <View
             style={[
               styles.alertBanner,
-              activeAlert.severity === 'danger' ? styles.alertDanger : styles.alertWarning,
+              activeAlert.severity === 'danger'
+                ? { backgroundColor: '#FEF2F2', borderColor: '#EF4444' }
+                : { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' },
             ]}
           >
             <Text style={styles.alertIcon}>🚨</Text>
             <View style={styles.alertTextGroup}>
-              <Text style={styles.alertTitle}>{activeAlert.name.toUpperCase()} DETECTED</Text>
-              <Text style={styles.alertDetails}>
+              <Text style={[styles.alertTitle, { color: palette.primaryText }]}>
+                {activeAlert.name.toUpperCase()} DETECTED
+              </Text>
+              <Text style={[styles.alertDetails, { color: palette.secondaryText }]}>
                 Sound Level: {activeAlert.decibels} dB • Confidence: {Math.round(activeAlert.confidence * 100)}%
               </Text>
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* LIVE AMBIENT SOUND RADAR CARD */}
-        <View style={styles.radarCard}>
+        <View style={[styles.radarCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
           <View style={styles.radarHeader}>
-            <Text style={styles.radarTitle}>AMBIENT SOUND RADAR</Text>
-            <View style={styles.liveIndicator}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>LISTENING</Text>
+            <Text style={[styles.radarTitle, { color: palette.accentTeal }]}>AMBIENT SOUND RADAR</Text>
+            <View style={[styles.liveIndicator, { backgroundColor: palette.accentLight }]}>
+              <View style={[styles.liveDot, { backgroundColor: palette.accentTeal }]} />
+              <Text style={[styles.liveText, { color: palette.accentTeal }]}>LISTENING</Text>
             </View>
           </View>
 
           <View style={styles.dbMeterContainer}>
-            <Text style={styles.dbNumber}>{currentDecibels}</Text>
-            <Text style={styles.dbUnit}>dB</Text>
+            <Text style={[styles.dbNumber, { color: palette.primaryText }]}>{currentDecibels}</Text>
+            <Text style={[styles.dbUnit, { color: palette.accentTeal }]}>dB</Text>
           </View>
 
-          <View style={styles.dbBarBackground}>
+          <View style={[styles.dbBarBackground, { backgroundColor: palette.background }]}>
             <View
               style={[
                 styles.dbBarFill,
                 { width: `${Math.min(100, (currentDecibels / 100) * 100)}%` },
-                currentDecibels > 75 ? styles.dbBarHigh : styles.dbBarNormal,
+                currentDecibels > 75
+                  ? { backgroundColor: '#EF4444' }
+                  : { backgroundColor: palette.accentTeal },
               ]}
             />
           </View>
-          <Text style={styles.dbLegend}>Normal Ambient (40–60 dB) • Warning Level (&gt;75 dB)</Text>
+          <Text style={[styles.dbLegend, { color: palette.secondaryText }]}>
+            Normal Ambient (40–60 dB) • Warning Level (&gt;75 dB)
+          </Text>
         </View>
 
         {/* PRIMARY ACTION CARDS */}
@@ -94,13 +115,15 @@ export const DeafDashboardScreen: React.FC<DeafDashboardProps> = ({
             onPress={onNavigateToCaptions}
           />
 
-          <AccessibleButton
-            title="🔔 Environmental Sound Alerts"
-            accessibilityHint="View detected sirens, horns, alarms, and door knocks"
-            size="large"
-            variant="secondary"
-            onPress={onNavigateToSoundAlerts}
-          />
+          {onNavigateToAlerts ? (
+            <AccessibleButton
+              title="🔔 Environmental Sound Alerts"
+              accessibilityHint="View detected sirens, horns, alarms, and door knocks"
+              size="large"
+              variant="secondary"
+              onPress={onNavigateToAlerts}
+            />
+          ) : null}
 
           <AccessibleButton
             title="🚨 Emergency SOS"
@@ -112,15 +135,19 @@ export const DeafDashboardScreen: React.FC<DeafDashboardProps> = ({
         </View>
 
         {/* FOOTER SWITCH MODE */}
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel="Switch Accessibility Mode"
-          accessibilityRole="button"
-          onPress={onSwitchMode}
-          style={styles.switchModeButton}
-        >
-          <Text style={styles.switchModeText}>🔄 Switch to Visual Assistance / Guardian</Text>
-        </TouchableOpacity>
+        {onSwitchMode ? (
+          <TouchableOpacity
+            accessible={true}
+            accessibilityLabel="Switch Accessibility Mode"
+            accessibilityRole="button"
+            onPress={onSwitchMode}
+            style={[styles.switchModeButton, { borderColor: palette.border }]}
+          >
+            <Text style={[styles.switchModeText, { color: palette.secondaryText }]}>
+              🔄 Switch Mode (Visual / Guardian)
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -129,68 +156,59 @@ export const DeafDashboardScreen: React.FC<DeafDashboardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   scrollContent: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xxxl,
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    color: Colors.deafBorder,
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
   statusText: {
     fontSize: 15,
-    color: Colors.textMediumEmphasis,
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   alertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
-    borderWidth: 2,
-  },
-  alertDanger: {
-    backgroundColor: Colors.emergencySurface,
-    borderColor: Colors.danger,
-  },
-  alertWarning: {
-    backgroundColor: '#382806',
-    borderColor: Colors.warning,
+    borderWidth: 1.5,
   },
   alertIcon: {
-    fontSize: 30,
+    fontSize: 28,
     marginRight: 12,
   },
   alertTextGroup: {
     flex: 1,
   },
   alertTitle: {
-    color: Colors.textHighEmphasis,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   alertDetails: {
-    color: Colors.textMediumEmphasis,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 2,
   },
   radarCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 20,
-    borderWidth: 2,
-    borderColor: Colors.borderSubtle,
-    marginBottom: 20,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: '#0F9D9A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
   },
   radarHeader: {
     flexDirection: 'row',
@@ -198,53 +216,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radarTitle: {
-    color: Colors.deafBorder,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.deafSurface,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.deafBorder,
   },
   liveDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.deafBorder,
     marginRight: 6,
   },
   liveText: {
-    color: Colors.textHighEmphasis,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
   },
   dbMeterContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    marginVertical: 14,
+    marginVertical: 12,
   },
   dbNumber: {
-    fontSize: 60,
-    fontWeight: '800',
-    color: Colors.textHighEmphasis,
+    fontSize: 54,
+    fontWeight: '900',
   },
   dbUnit: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.deafBorder,
+    fontSize: 20,
+    fontWeight: '800',
     marginLeft: 6,
   },
   dbBarBackground: {
     height: 12,
-    backgroundColor: Colors.surfaceInteractive,
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -252,32 +261,23 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 6,
   },
-  dbBarNormal: {
-    backgroundColor: Colors.deafPrimary,
-  },
-  dbBarHigh: {
-    backgroundColor: Colors.danger,
-  },
   dbLegend: {
-    color: Colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '500',
   },
   actionsGrid: {
-    gap: 8,
+    gap: 10,
   },
   switchModeButton: {
-    marginTop: 24,
-    paddingVertical: 16,
+    marginTop: 20,
+    paddingVertical: 14,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   switchModeText: {
-    color: Colors.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
