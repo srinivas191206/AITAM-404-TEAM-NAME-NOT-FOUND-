@@ -237,6 +237,9 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       },
       onResult: (spokenText: string) => {
         if (isMountedRef.current) {
+          if (ttsService.getSpeakingState()) {
+            return;
+          }
           processSpokenCommand(spokenText);
         }
       },
@@ -273,6 +276,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   const processSpokenCommand = async (rawTranscript: string) => {
+    await speechRecognitionService.stopListening();
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
@@ -332,8 +336,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             setIsCameraActive(false);
           }
           setVoiceState('READY');
-          // HANDS-FREE AUTOMATIC RESUME: Listen again after answering!
-          setTimeout(startListeningHandsFree, 600);
+          // HANDS-FREE AUTOMATIC RESUME: Listen again after speech is done
+          setTimeout(() => {
+            if (isMountedRef.current && !ttsService.getSpeakingState()) {
+              startListeningHandsFree();
+            }
+          }, 900);
         }
       },
       onError: () => {
@@ -434,14 +442,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* ACTIVE CAMERA VIEW (WHEN VISION / OCR / CURRENCY ACTIVE) */}
-            {isCameraActive ? (
-              <VisionCameraPreview
-                cameraRef={cameraRef}
-                isActive={isCameraActive}
-                detections={activeDetections}
-              />
-            ) : null}
+            {/* ACTIVE CAMERA VIEWPORT (ALWAYS MOUNTED FOR INSTANT PERCEPTION) */}
+            <VisionCameraPreview
+              cameraRef={cameraRef}
+              isActive={isCameraActive}
+              detections={activeDetections}
+            />
 
             {/* STATE INDICATOR HUD CARD */}
             <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>

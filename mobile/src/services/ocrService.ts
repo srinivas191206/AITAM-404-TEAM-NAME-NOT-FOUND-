@@ -1,4 +1,4 @@
-﻿import { Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { CameraFrameResult } from './cameraService';
 import { NativeVisionBridge } from './nativeVisionBridge';
 import { groqVisionService } from './groqVisionService';
@@ -106,30 +106,44 @@ class OCRService {
       let extractedRawText = '';
       let blocks: OCRTextBlock[] = [];
 
-      // 1. PRIMARY ENGINE: PaddleOCR
+      // 1. PRIMARY ENGINE: PaddleOCR (Baidu PP-OCRv6)
       if (frame.base64) {
-        try {
-          const paddleResponse = await fetch(this.getPaddleOcrUrl(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: frame.base64 }),
-          });
+        const endpoints = [
+          'http://10.0.2.2:5001/ocr',
+          'http://10.204.134.150:5001/ocr',
+          'http://localhost:5001/ocr',
+        ];
 
-          if (paddleResponse.ok) {
-            const paddleData = await paddleResponse.json();
-            if (paddleData.success && paddleData.text && paddleData.text.trim().length > 0) {
-              extractedRawText = paddleData.text.trim();
-              blocks = (paddleData.blocks || []).map((b: any) => ({
-                text: b.text,
-                lines: [b.text],
-                confidence: b.confidence || 0.98,
-                boundingBox: b.boundingBox,
-              }));
-              console.log('[OCRService] PaddleOCR recognized text successfully.');
+        for (const ep of endpoints) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+            const paddleResponse = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: frame.base64 }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (paddleResponse.ok) {
+              const paddleData = await paddleResponse.json();
+              if (paddleData.success && paddleData.text && paddleData.text.trim().length > 0) {
+                extractedRawText = paddleData.text.trim();
+                blocks = (paddleData.blocks || []).map((b: any) => ({
+                  text: b.text,
+                  lines: [b.text],
+                  confidence: b.confidence || 0.98,
+                  boundingBox: b.boundingBox,
+                }));
+                console.log(`[OCRService] PaddleOCR (${ep}) recognized: ${extractedRawText}`);
+                break;
+              }
             }
+          } catch (paddleErr) {
+            // try next endpoint
           }
-        } catch (paddleErr) {
-          console.warn('[OCRService] PaddleOCR service call note:', paddleErr);
         }
       }
 

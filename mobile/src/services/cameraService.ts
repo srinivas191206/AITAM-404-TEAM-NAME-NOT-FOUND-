@@ -1,4 +1,4 @@
-﻿import { Camera, CameraView } from 'expo-camera';
+import { Camera, CameraView } from 'expo-camera';
 import { Platform } from 'react-native';
 
 export interface CameraFrameResult {
@@ -48,34 +48,42 @@ class CameraService {
   public async captureFrameFromRef(
     cameraRef: React.RefObject<CameraView> | { current: CameraView | null }
   ): Promise<CameraFrameResult | null> {
+    // Wait up to 1200ms if ref is attaching
+    let attempts = 0;
+    while (!cameraRef.current && attempts < 12) {
+      await new Promise((r) => setTimeout(r, 100));
+      attempts++;
+    }
+
     if (!cameraRef.current) {
-      console.warn('[CameraService] Camera ref is null during capture');
+      console.warn('[CameraService] Camera ref remained null during capture');
       return null;
     }
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5,
-        base64: true,
-        skipProcessing: false,
-        shutterSound: false,
-      });
+    for (let tryCount = 0; tryCount < 2; tryCount++) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.6,
+          base64: true,
+          skipProcessing: false,
+          shutterSound: false,
+        });
 
-      if (!photo || !photo.uri) {
-        return null;
+        if (photo && photo.uri) {
+          return {
+            uri: photo.uri,
+            width: photo.width || 1280,
+            height: photo.height || 720,
+            timestamp: Date.now(),
+            base64: photo.base64,
+          };
+        }
+      } catch (err) {
+        console.warn(`[CameraService] Capture attempt ${tryCount + 1} note:`, err);
+        await new Promise((r) => setTimeout(r, 250));
       }
-
-      return {
-        uri: photo.uri,
-        width: photo.width || 1280,
-        height: photo.height || 720,
-        timestamp: Date.now(),
-        base64: photo.base64,
-      };
-    } catch (err) {
-      console.error('[CameraService] Error taking picture:', err);
-      return null;
     }
+    return null;
   }
 
   public setCameraReady(ready: boolean): void {

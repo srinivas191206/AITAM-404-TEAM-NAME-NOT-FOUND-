@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Colors } from '../../theme/colors';
@@ -24,33 +24,19 @@ export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
 }) => {
   const [isReady, setIsReady] = useState(false);
 
-  if (!isActive) {
-    return (
-      <View
-        accessible={true}
-        accessibilityLabel="Camera perception viewport is currently idle."
-        style={[styles.idleContainer, style]}
-      >
-        <View style={styles.idlePlaceholder}>
-          <Text style={styles.idleIcon}>📷</Text>
-          <Text style={styles.idleTitle}>Camera Perception Ready</Text>
-          <Text style={styles.idleSubtitle}>
-            Activates automatically when you ask "What's in front of me?"
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View
       accessible={true}
-      accessibilityLabel={`Camera perception viewport is active. ${detections.length} objects detected.`}
-      style={[styles.activeContainer, style]}
+      accessibilityLabel={
+        isActive
+          ? `Camera perception viewport is active. ${detections.length} objects detected.`
+          : 'Camera perception viewport is currently idle.'
+      }
+      style={[isActive ? styles.activeContainer : styles.idleContainer, style]}
     >
       <CameraView
         ref={cameraRef}
-        style={styles.camera}
+        style={isActive ? styles.camera : { position: 'absolute', width: 1, height: 1, opacity: 0.01 }}
         facing="back"
         enableTorch={false}
         onCameraReady={() => {
@@ -62,43 +48,54 @@ export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
           onMountError?.(err);
         }}
       >
-        {/* CALM ACCESSIBLE VIEWPORT CORNERS */}
-        <View style={styles.overlay} pointerEvents="none">
-          <View style={styles.cornerTopLeft} />
-          <View style={styles.cornerTopRight} />
-          <View style={styles.cornerBottomLeft} />
-          <View style={styles.cornerBottomRight} />
+        {isActive ? (
+          <View style={styles.overlay} pointerEvents="none">
+            <View style={styles.cornerTopLeft} />
+            <View style={styles.cornerTopRight} />
+            <View style={styles.cornerBottomLeft} />
+            <View style={styles.cornerBottomRight} />
 
-          <View style={styles.activePill}>
-            <View style={styles.activeDot} />
-            <Text style={styles.activePillText}>
-              PERCEPTION ACTIVE {detections.length > 0 ? `(${detections.length} DETECTED)` : ''}
-            </Text>
-          </View>
-
-          {/* VISUAL DEBUG BOUNDING BOXES (DEVELOPMENT / ACCESSIBILITY HUD) */}
-          {detections.map((det) => (
-            <View
-              key={det.id}
-              style={[
-                styles.detectionBox,
-                {
-                  left: det.position === 'LEFT' ? '10%' : det.position === 'RIGHT' ? '55%' : '30%',
-                  top: det.position === 'LEFT' ? '25%' : '35%',
-                  width: '35%',
-                  height: '45%',
-                },
-              ]}
-            >
-              <View style={styles.detectionBadge}>
-                <Text style={styles.detectionBadgeText}>
-                  {det.label.toUpperCase()} {Math.round(det.confidence * 100)}% [{det.position}]
-                </Text>
-              </View>
+            <View style={styles.activePill}>
+              <View style={styles.activeDot} />
+              <Text style={styles.activePillText}>
+                PERCEPTION ACTIVE {detections.length > 0 ? `(${detections.length} DETECTED)` : ''}
+              </Text>
             </View>
-          ))}
-        </View>
+
+            {/* VISUAL DEBUG BOUNDING BOXES */}
+            {detections.map((det) => (
+              <View
+                key={det.id}
+                style={[
+                  styles.detectionBox,
+                  {
+                    left: det.position === 'LEFT' ? '10%' : det.position === 'RIGHT' ? '55%' : '30%',
+                    top: det.position === 'LEFT' ? '25%' : '35%',
+                    width: '35%',
+                    height: '45%',
+                  },
+                ]}
+              >
+                <View style={styles.detectionBadge}>
+                  <Text style={styles.detectionBadgeText}>
+                    {det.label.toUpperCase()} {Math.round(det.confidence * 100)}% [{det.position}]
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </CameraView>
+
+      {!isActive ? (
+        <View style={styles.idlePlaceholder}>
+          <Text style={styles.idleIcon}>📷</Text>
+          <Text style={styles.idleTitle}>Camera Perception Ready</Text>
+          <Text style={styles.idleSubtitle}>
+            Activates automatically when you ask "What's in front of me?" or "Read text"
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };

@@ -102,17 +102,39 @@ class CurrencyService {
     try {
       this.isProcessing = true;
 
-      const response = await fetch(this.getCurrencyServiceUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: frame.base64 }),
-      });
+      const endpoints = [
+        'http://10.0.2.2:5001/currency',
+        'http://10.204.134.150:5001/currency',
+        'http://localhost:5001/currency',
+      ];
 
-      if (!response.ok) {
-        throw new Error(`Currency service returned status ${response.status}`);
+      let data: any = null;
+      for (const ep of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+          const response = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: frame.base64 }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            data = await response.json();
+            break;
+          }
+        } catch (epErr) {
+          // try next
+        }
       }
 
-      const data = await response.json();
+      if (!data) {
+        throw new Error('Currency service endpoints unreachable');
+      }
+
       const inferenceTimeMs = Date.now() - startTime;
 
       if (data && data.success && data.detected && data.value) {

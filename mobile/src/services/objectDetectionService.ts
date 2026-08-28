@@ -199,33 +199,79 @@ class ObjectDetectionService {
 
       const rawDetections: DetectionResult[] = [];
 
-      // 1. Try Real Native Google ML Kit / Object Detector
-      const nativeObjects = await NativeVisionBridge.detectObjects(frame.uri);
+      // 1. PRIMARY NEURAL DETECTOR: YOLOv8 Object Detection Engine
+      if (frame.base64) {
+        const endpoints = [
+          'http://10.0.2.2:5001/detect',
+          'http://10.204.134.150:5001/detect',
+          'http://localhost:5001/detect',
+        ];
 
-      if (nativeObjects && nativeObjects.length > 0) {
-        nativeObjects.forEach((obj, idx) => {
-          const box = obj.boundingBox || {
-            x: Math.round(imageWidth * 0.2),
-            y: Math.round(imageHeight * 0.3),
-            width: Math.round(imageWidth * 0.4),
-            height: Math.round(imageHeight * 0.5),
-          };
-          const cX = box.x + Math.round(box.width / 2);
-          const cY = box.y + Math.round(box.height / 2);
+        for (const ep of endpoints) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-          rawDetections.push({
-            id: `native_${idx}`,
-            label: obj.primaryLabel || 'object',
-            confidence: obj.confidence || 0.85,
-            boundingBox: box,
-            centerX: cX,
-            centerY: cY,
-            position: this.calculatePosition(cX, imageWidth),
-          });
-        });
+            const resp = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: frame.base64 }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (resp.ok) {
+              const detectData = await resp.json();
+              if (detectData.success && Array.isArray(detectData.detections) && detectData.detections.length > 0) {
+                detectData.detections.forEach((d: any, idx: number) => {
+                  rawDetections.push({
+                    id: d.id || `yolo_${idx}`,
+                    label: d.label || 'object',
+                    confidence: d.confidence || 0.88,
+                    boundingBox: d.boundingBox || { x: 100, y: 100, width: 200, height: 200 },
+                    centerX: d.centerX || 200,
+                    centerY: d.centerY || 200,
+                    position: d.position || 'CENTER',
+                  });
+                });
+                console.log(`[ObjectDetection] YOLOv8 (${ep}) detected ${rawDetections.length} objects.`);
+                break;
+              }
+            }
+          } catch (e) {
+            // try next endpoint
+          }
+        }
       }
 
-      // 2. Open-Vocabulary Multimodal Object Detection via Groq Vision
+      // 2. SECONDARY DETECTOR: Native Google ML Kit On-Device
+      if (rawDetections.length === 0 && frame.uri) {
+        const nativeObjects = await NativeVisionBridge.detectObjects(frame.uri);
+        if (nativeObjects && nativeObjects.length > 0) {
+          nativeObjects.forEach((obj, idx) => {
+            const box = obj.boundingBox || {
+              x: Math.round(imageWidth * 0.2),
+              y: Math.round(imageHeight * 0.3),
+              width: Math.round(imageWidth * 0.4),
+              height: Math.round(imageHeight * 0.5),
+            };
+            const cX = box.x + Math.round(box.width / 2);
+            const cY = box.y + Math.round(box.height / 2);
+
+            rawDetections.push({
+              id: `native_${idx}`,
+              label: obj.primaryLabel || 'object',
+              confidence: obj.confidence || 0.85,
+              boundingBox: box,
+              centerX: cX,
+              centerY: cY,
+              position: this.calculatePosition(cX, imageWidth),
+            });
+          });
+        }
+      }
+
+      // 3. TERTIARY: Open-Vocabulary Multimodal Object Detection via Groq Vision
       if (rawDetections.length === 0 && frame.base64 && groqVisionService.hasActiveKeys()) {
         try {
           const prompt = `List the primary visible objects in the scene and their positions (LEFT, CENTER, or RIGHT). 
