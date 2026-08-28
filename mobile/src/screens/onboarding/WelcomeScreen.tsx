@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StatusBar,
   ScrollView,
   TouchableOpacity,
+  DeviceEventEmitter,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '../../theme/colors';
@@ -50,6 +51,8 @@ const ShieldIcon: React.FC<{ color?: string; size?: number }> = ({
 );
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
+  const isHandledRef = useRef(false);
+
   const palette = Colors.tealSlate || {
     background: '#F7FAFA',
     card: '#FFFFFF',
@@ -60,29 +63,48 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
     border: '#E2E8F0',
   };
 
+  const handleSelectBlind = () => {
+    if (isHandledRef.current) return;
+    isHandledRef.current = true;
+    onContinue('blind');
+  };
+
+  const handleSelectDeaf = () => {
+    if (isHandledRef.current) return;
+    isHandledRef.current = true;
+    onContinue('deaf');
+  };
+
   useEffect(() => {
-    // Spoken audio instructions in English, Telugu, and Hindi
+    // Audio prompt announced on mount in English, Telugu, and Hindi
     const announcementText =
-      'Welcome to Access Plus. Say "Blind" for Visual Assistance, or say "Deaf" for Hearing Assistance. You can also tap anywhere on the screen.';
+      'Welcome to Access Plus. Say anything or tap the screen for Visual Assistance Mode. Double tap bottom for Hearing Assistance Mode.';
 
     outputService.announce(announcementText, 'high');
 
-    // Auto-listen for voice mode command
+    // Hardware volume change listener fallback
+    const sub1 = DeviceEventEmitter.addListener('onVolumeChange', handleSelectBlind);
+    const sub2 = DeviceEventEmitter.addListener('VolumeChanged', handleSelectBlind);
+
+    // Auto-listen for voice command
     speechRecognitionService.startListening({
       onResult: (spokenText: string) => {
         const lower = spokenText.toLowerCase();
-        if (lower.includes('blind') || lower.includes('visual') || lower.includes('eye')) {
-          onContinue('blind');
-        } else if (lower.includes('deaf') || lower.includes('hearing') || lower.includes('ear')) {
-          onContinue('deaf');
+        if (lower.includes('deaf') || lower.includes('hearing') || lower.includes('ear')) {
+          handleSelectDeaf();
         } else if (lower.includes('guardian') || lower.includes('caregiver')) {
           onContinue('guardian');
+        } else {
+          // ANY spoken input defaults to Visual Assistance Mode for blind users!
+          handleSelectBlind();
         }
       },
       onError: () => {},
     });
 
     return () => {
+      sub1.remove();
+      sub2.remove();
       speechRecognitionService.stopListening();
     };
   }, []);
@@ -95,28 +117,28 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
         <View style={styles.headerSection}>
           <Text style={[styles.title, { color: palette.primaryText }]}>Access+ Assistant</Text>
           <Text style={[styles.subtitle, { color: palette.secondaryText }]}>
-            Select your assistance mode to continue. Voice assistant is listening...
+            Tap anywhere or say "Hi" to start Visual Assistance. Voice assistant is listening...
           </Text>
         </View>
 
         {/* 0-TOUCH LARGE SELECTION CARDS */}
         <View style={styles.cardsSection}>
-          {/* Visual Assistance (Blind Mode) */}
+          {/* Visual Assistance (Blind Mode) - LARGE PRIMARY TARGET */}
           <TouchableOpacity
             accessible={true}
-            accessibilityLabel="Visual Assistance Mode for Blind users. Say Blind or tap here."
+            accessibilityLabel="Visual Assistance Mode for Blind users. Say anything or tap anywhere here to start."
             accessibilityRole="button"
             activeOpacity={0.8}
-            onPress={() => onContinue('blind')}
-            style={[styles.modeCard, { backgroundColor: '#F4FBFB', borderColor: palette.accentTeal }]}
+            onPress={handleSelectBlind}
+            style={[styles.modeCard, styles.primaryBlindCard, { backgroundColor: '#F4FBFB', borderColor: palette.accentTeal }]}
           >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <EyeIcon color={palette.accentTeal} size={30} />
+              <EyeIcon color={palette.accentTeal} size={36} />
             </View>
             <View style={styles.cardTextGroup}>
               <Text style={[styles.cardTitle, { color: palette.primaryText }]}>👁️ Visual Assistance (Blind)</Text>
               <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
-                Hands-free voice assistant, camera vision, OCR text reading, and INR currency detection. Say "Blind" to select.
+                TAP ANYWHERE or SAY ANYTHING out loud to select automatically. Includes hands-free camera vision, OCR, and currency detection.
               </Text>
             </View>
           </TouchableOpacity>
@@ -127,16 +149,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
             accessibilityLabel="Hearing Assistance Mode for Deaf users. Say Deaf or tap here."
             accessibilityRole="button"
             activeOpacity={0.8}
-            onPress={() => onContinue('deaf')}
+            onPress={handleSelectDeaf}
             style={[styles.modeCard, { backgroundColor: palette.card, borderColor: palette.border }]}
           >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <EarIcon color={palette.accentTeal} size={30} />
+              <EarIcon color={palette.accentTeal} size={28} />
             </View>
             <View style={styles.cardTextGroup}>
               <Text style={[styles.cardTitle, { color: palette.primaryText }]}>🧏 Hearing Assistance (Deaf)</Text>
               <Text style={[styles.cardDesc, { color: palette.secondaryText }]}>
-                Live speech captions, sound radar (siren, horn, doorbell), and visual emergency alerts. Say "Deaf" to select.
+                Live speech captions, sound radar (siren, horn, doorbell), and visual emergency alerts. Say "Deaf" or tap here.
               </Text>
             </View>
           </TouchableOpacity>
@@ -151,7 +173,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onContinue }) => {
             style={[styles.modeCard, { backgroundColor: palette.card, borderColor: palette.border }]}
           >
             <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
-              <ShieldIcon color={palette.accentTeal} size={30} />
+              <ShieldIcon color={palette.accentTeal} size={28} />
             </View>
             <View style={styles.cardTextGroup}>
               <Text style={[styles.cardTitle, { color: palette.primaryText }]}>🛡️ Guardian Monitor</Text>
@@ -203,6 +225,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
+  },
+  primaryBlindCard: {
+    paddingVertical: 32,
+    borderWidth: 3,
   },
   iconCircle: {
     width: 56,

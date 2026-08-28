@@ -1,118 +1,113 @@
-/**
- * Groq Vision & AI Service with Automatic Multi-Key Rotation and Gemini Fallback
- */
-
 import { LOCAL_GROQ_KEYS } from '../config/groqKeys.local';
 import { geminiVisionService } from './geminiVisionService';
+import { ttsService } from './ttsService';
 
 class GroqVisionService {
-  private keys: string[] = [...LOCAL_GROQ_KEYS];
-  private currentKeyIndex: number = 0;
-  private keyCooldowns: Map<string, number> = new Map();
+  private keys: string[] = [];
+  private currentKeyIndex = 0;
+  private rateLimitedKeys: Set<string> = new Set();
 
   constructor() {
-    this.keys = [...LOCAL_GROQ_KEYS];
+    this.keys = Array.isArray(LOCAL_GROQ_KEYS) ? LOCAL_GROQ_KEYS : [];
   }
 
-  public setKeys(newKeys: string[]) {
-    this.keys = newKeys.filter((k) => typeof k === 'string' && k.trim().length > 10);
+  private getActiveKey(): string | null {
+    if (this.keys.length === 0) return null;
+
+    for (let i = 0; i < this.keys.length; i++) {
+      const idx = (this.currentKeyIndex + i) % this.keys.length;
+      const key = this.keys[idx];
+      if (!this.rateLimitedKeys.has(key)) {
+        this.currentKeyIndex = idx;
+        return key;
+      }
+    }
+    this.rateLimitedKeys.clear();
+    return this.keys[0] || null;
+  }
+
+  private markKeyRateLimited(key: string) {
+    console.warn(`[GroqVisionService] Rate limit / error on key ending ...${key.slice(-6)}. Rotating key.`);
+    this.rateLimitedKeys.add(key);
+    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
   }
 
   public hasActiveKeys(): boolean {
     return this.keys.length > 0;
   }
 
-  private getActiveKey(): string {
-    if (this.keys.length === 0) return '';
-    const now = Date.now();
-    for (let i = 0; i < this.keys.length; i++) {
-      const idx = (this.currentKeyIndex + i) % this.keys.length;
-      const key = this.keys[idx];
-      const cooldownUntil = this.keyCooldowns.get(key) || 0;
-
-      if (now > cooldownUntil) {
-        this.currentKeyIndex = idx;
-        return key;
-      }
-    }
-    const fallbackKey = this.keys[this.currentKeyIndex] || '';
-    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-    return fallbackKey;
-  }
-
-  private markKeyRateLimited(key: string) {
-    console.warn(`[GroqVisionService] Key rate limited. Rotating to next key in pool...`);
-    this.keyCooldowns.set(key, Date.now() + 60000); // 1-minute cooldown
-    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
-  }
-
+  /**
+   * Primary Vision Pipeline: Multi-Key Groq LLaMA 3.2 Vision
+   * Fallback: Gemini 1.5 Flash Vision
+   */
   public async analyzeWithVision(
     base64Image: string,
-    prompt: string,
-    maxRetries: number = 5
+    prompt: string
   ): Promise<string | null> {
-    if (!base64Image) return null;
+    if (!base64Image || this.keys.length === 0) {
+      return await geminiVisionService.analyzeVision(base64Image, prompt);
+    }
 
-    const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
+    const currentLang = ttsService.getLanguage().slice(0, 2);
+    const systemPrompt =
+      currentLang === 'te'
+        ? 'నమస్కారం! జవాబును పూర్తిగా సరళమైన తెలుగు భాషలో అందించండి.'
+        : currentLang === 'hi'
+        ? 'नमस्ते! उत्तर पूरी तरह से सरल हिंदी भाषा में दें।'
+        : 'Please respond clearly in simple English.';
 
-    // TIER 1: GROQ MULTI-KEY POOL ROTATION
-    if (this.keys.length > 0) {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        const activeKey = this.getActiveKey();
-        if (!activeKey) break;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const activeKey = this.getActiveKey();
+      if (!activeKey) break;
 
-        try {
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${activeKey}`,
-            },
-            body: JSON.stringify({
-              model: 'llama-3.2-11b-vision-preview',
-              messages: [
-                {
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: `${prompt} Answer in 1 or 2 concise, natural sentences suitable for a blind user listening to audio. Never mention you are an AI or describe photo quality. Speak directly as if you are their eyes.`,
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'llama-3.2-11b-vision-preview',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: `${systemPrompt}\n${prompt}` },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:image/jpeg;base64,${base64Image}`,
                     },
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:image/jpeg;base64,${cleanBase64}`,
-                      },
-                    },
-                  ],
-                },
-              ],
-              max_tokens: 150,
-              temperature: 0.2,
-            }),
-          });
+                  },
+                ],
+              },
+            ],
+            temperature: 0.2,
+            max_tokens: 300,
+          }),
+        });
 
-          if (response.status === 429 || response.status === 401 || response.status === 403) {
-            this.markKeyRateLimited(activeKey);
-            continue;
-          }
-
-          if (!response.ok) {
-            const errText = await response.text();
-            console.warn(`[GroqVisionService] API Error (${response.status}):`, errText);
-            this.markKeyRateLimited(activeKey);
-            continue;
-          }
-
-          const data = await response.json();
-          const content = data?.choices?.[0]?.message?.content?.trim();
-          if (content) {
-            return content;
-          }
-        } catch (err) {
-          console.warn(`[GroqVisionService] Request error:`, err);
+        if (response.status === 429 || response.status === 401 || response.status === 403) {
           this.markKeyRateLimited(activeKey);
+          continue;
         }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          console.warn(`[GroqVisionService] API Error (${response.status}):`, errBody);
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content && content.trim().length > 0) {
+          return content.trim();
+        }
+      } catch (err) {
+        console.warn(`[GroqVisionService] Request error:`, err);
+        this.markKeyRateLimited(activeKey);
       }
     }
 
@@ -147,8 +142,10 @@ class GroqVisionService {
     return await this.analyzeWithVision(base64Image, userQuestion);
   }
 
-  public async transcribeAudio(fileUri: string): Promise<string | null> {
+  public async transcribeAudio(fileUri: string, langCode?: string): Promise<string | null> {
     if (!fileUri || this.keys.length === 0) return null;
+
+    const targetLang = (langCode || ttsService.getLanguage()).slice(0, 2);
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const activeKey = this.getActiveKey();
@@ -163,6 +160,9 @@ class GroqVisionService {
         } as any);
         formData.append('model', 'whisper-large-v3');
         formData.append('temperature', '0.0');
+        if (targetLang === 'te' || targetLang === 'hi' || targetLang === 'en') {
+          formData.append('language', targetLang);
+        }
 
         const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
           method: 'POST',
@@ -178,19 +178,16 @@ class GroqVisionService {
         }
 
         if (!response.ok) {
-          const errText = await response.text();
-          console.warn(`[GroqVisionService] Whisper STT API Error:`, errText);
           this.markKeyRateLimited(activeKey);
           continue;
         }
 
         const data = await response.json();
-        const text = data?.text?.trim();
-        if (text) {
-          return text;
+        if (data?.text && data.text.trim().length > 0) {
+          return data.text.trim();
         }
       } catch (err) {
-        console.warn('[GroqVisionService] Whisper request error:', err);
+        console.warn(`[GroqVisionService] Transcription error:`, err);
         this.markKeyRateLimited(activeKey);
       }
     }

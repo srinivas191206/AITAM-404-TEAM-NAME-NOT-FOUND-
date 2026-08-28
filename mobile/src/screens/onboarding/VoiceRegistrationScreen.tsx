@@ -18,11 +18,11 @@ import {
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { AppHeader } from '../../components/AppHeader';
-import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
 import { voiceInputService } from '../../services/voiceInputService';
 import { speechRecognitionService } from '../../services/speechRecognitionService';
+import { ttsService } from '../../services/ttsService';
 
 interface VoiceRegistrationScreenProps {
   initialProfile: UserProfile;
@@ -71,7 +71,6 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
 }) => {
   const [currentField, setCurrentField] = useState<VoiceRegistrationField>('fullName');
   const [pendingValue, setPendingValue] = useState<string>('');
-  const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [spokenTranscript, setSpokenTranscript] = useState<string>('');
   const [isListening, setIsListening] = useState<boolean>(false);
 
@@ -96,15 +95,17 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
     initialProfile.emergencyContact?.phoneNumber || ''
   );
   const [emergencyRelation, setEmergencyRelation] = useState<string>(
-    initialProfile.emergencyContact?.relationship || 'Family'
+    initialProfile.emergencyContact?.relationship || ''
   );
   const [guardianLinked, setGuardianLinked] = useState<boolean>(false);
 
   const isMounted = useRef(true);
+  const currentFieldRef = useRef<VoiceRegistrationField>('fullName');
   const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
+    currentFieldRef.current = 'fullName';
     startVoiceOnboarding();
     return () => {
       isMounted.current = false;
@@ -136,49 +137,87 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
     });
   };
 
-  const askCurrentQuestion = async (field: VoiceRegistrationField) => {
-    setIsConfirming(false);
-    setPendingValue('');
-    setIsListening(false);
-
-    let question = '';
-    switch (field) {
-      case 'fullName':
-        question = 'What is your full name?';
-        break;
-      case 'phoneNumber':
-        question = 'What is your mobile phone number?';
-        break;
-      case 'address':
-        question = 'What is your city or address?';
-        break;
-      case 'emergencyContactName':
-        question = 'What is the full name of your emergency contact?';
-        break;
-      case 'emergencyContactPhone':
-        question = "What is your emergency contact's phone number?";
-        break;
-      case 'emergencyContactRelation':
-        question = 'What is their relationship to you, such as Family or Friend?';
-        break;
-      case 'guardianChoice':
-        question = 'Would you like to link a guardian now, or set it up later? Say Link or Later.';
-        break;
-      case 'review':
-        question = `Let's review your information. Your name is ${fullName}. Phone is ${phoneNumber}. Emergency contact is ${emergencyName} at ${emergencyPhone}. Say Yes to finish.`;
-        break;
+  const getQuestionText = (field: VoiceRegistrationField): string => {
+    const lang = ttsService.getLanguage().slice(0, 2);
+    if (lang === 'te') {
+      switch (field) {
+        case 'fullName':
+          return 'మీ పూర్తి పేరు ఏమిటి?';
+        case 'phoneNumber':
+          return 'మీ మొబైల్ ఫోన్ నంబర్ ఏమిటి?';
+        case 'address':
+          return 'మీ ఊరు లేదా చిరునామా ఏమిటి?';
+        case 'emergencyContactName':
+          return 'మీ అత్యవసర కాంటాక్ట్ పేరు ఏమిటి?';
+        case 'emergencyContactPhone':
+          return 'మీ అత్యవసర కాంటాక్ట్ ఫోన్ నంబర్ ఏమిటి?';
+        case 'emergencyContactRelation':
+          return 'వారితో మీ సంబంధం ఏమిటి? కుటుంబ సభ్యులా లేదా స్నేహితులా?';
+        case 'guardianChoice':
+          return 'గార్డియన్‌ని ఇప్పుడే లింక్ చేయాలా లేదా తర్వాత సెటప్ చేయాలా? లింక్ లేదా తర్వాత అని చెప్పండి.';
+        case 'review':
+          return `మీ సమాచారం: పేరు ${fullName}, ఫోన్ ${phoneNumber}, అత్యవసర ఫోన్ ${emergencyPhone}. పూర్తి చేయడానికి అవును అని చెప్పండి.`;
+      }
+    } else if (lang === 'hi') {
+      switch (field) {
+        case 'fullName':
+          return 'आपका पूरा नाम क्या है?';
+        case 'phoneNumber':
+          return 'आपका मोबाइल फोन नंबर क्या है?';
+        case 'address':
+          return 'आपका शहर या पता क्या है?';
+        case 'emergencyContactName':
+          return 'आपके आपातकालीन संपर्क का पूरा नाम क्या है?';
+        case 'emergencyContactPhone':
+          return 'आपके आपातकालीन संपर्क का फोन नंबर क्या है?';
+        case 'emergencyContactRelation':
+          return 'उनके साथ आपका क्या संबंध है?';
+        case 'guardianChoice':
+          return 'क्या आप अभिभावक को अभी जोड़ना चाहते हैं? लिंक या बाद में कहें।';
+        case 'review':
+          return `आपकी जानकारी: नाम ${fullName}, फोन ${phoneNumber}, आपातकालीन ${emergencyPhone}। पूरा करने के लिए हाँ कहें।`;
+      }
     }
 
+    // Default English
+    switch (field) {
+      case 'fullName':
+        return 'What is your full name?';
+      case 'phoneNumber':
+        return 'What is your mobile phone number?';
+      case 'address':
+        return 'What is your city or address?';
+      case 'emergencyContactName':
+        return 'What is the full name of your emergency contact?';
+      case 'emergencyContactPhone':
+        return "What is your emergency contact's phone number?";
+      case 'emergencyContactRelation':
+        return 'What is their relationship to you, such as Family or Friend?';
+      case 'guardianChoice':
+        return 'Would you like to link a guardian now, or set it up later? Say Link or Later.';
+      case 'review':
+        return `Let's review your information. Your name is ${fullName}. Phone is ${phoneNumber}. Emergency contact is ${emergencyName} at ${emergencyPhone}. Say Yes to finish.`;
+    }
+  };
+
+  const askCurrentQuestion = async (field: VoiceRegistrationField) => {
+    currentFieldRef.current = field;
+    setCurrentField(field);
+    setPendingValue('');
+    setSpokenTranscript('');
+    setIsListening(false);
+
+    const question = getQuestionText(field);
     await outputService.announce(question, 'urgent');
     setTimeout(() => {
-      startMicListener();
+      if (isMounted.current) {
+        startMicListener();
+      }
     }, 1000);
   };
 
   /**
-   * 2-Second Speech Pause Auto-Submit Logic
-   * When user says "Srinivas", wait 2 seconds for any additional words.
-   * If silence continues, automatically accept Srinivas and move to next question!
+   * 4-Second Speech Pause Auto-Submit Logic
    */
   const handleSpokenInput = async (rawInput: string) => {
     if (!rawInput.trim()) return;
@@ -186,65 +225,69 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
     await hapticService.medium();
     setSpokenTranscript(rawInput);
 
+    const activeField = currentFieldRef.current;
+
     let cleanValue = rawInput.trim();
-    if (currentField === 'phoneNumber' || currentField === 'emergencyContactPhone') {
+    if (activeField === 'phoneNumber' || activeField === 'emergencyContactPhone') {
       cleanValue = voiceInputService.normalizePhoneNumber(rawInput);
     }
 
     setPendingValue(cleanValue);
 
-    // Clear previous timer if user is still speaking
     if (pauseTimerRef.current) {
       clearTimeout(pauseTimerRef.current);
     }
 
-    // 2-Second Pause Auto-Submit Timer
+    // 4-Second Pause Auto-Submit Timer
     pauseTimerRef.current = setTimeout(async () => {
       if (!isMounted.current) return;
-      await autoSubmitSpokenValue(cleanValue);
-    }, 2000);
+      await autoSubmitSpokenValue(cleanValue, activeField);
+    }, 4000);
   };
 
-  const autoSubmitSpokenValue = async (value: string) => {
-    await hapticService.heavy();
+  const getSavedAudioText = (fieldLabel: string, val: string): string => {
+    const lang = ttsService.getLanguage().slice(0, 2);
+    if (lang === 'te') return `${fieldLabel} ${val} గా సేవ్ చేయబడింది.`;
+    if (lang === 'hi') return `${fieldLabel} ${val} सहेजा गया।`;
+    return `${fieldLabel} saved as ${val}.`;
+  };
 
-    switch (currentField) {
+  const autoSubmitSpokenValue = async (value: string, field: VoiceRegistrationField) => {
+    await hapticService.heavy();
+    const lang = ttsService.getLanguage().slice(0, 2);
+
+    switch (field) {
       case 'fullName':
         setFullName(value);
         await onSaveProfile({ fullName: value, name: value });
-        await outputService.announce(`Name saved as ${value}.`, 'high');
-        setCurrentField('phoneNumber');
-        setTimeout(() => askCurrentQuestion('phoneNumber'), 1200);
+        await outputService.announce(getSavedAudioText(lang === 'te' ? 'పేరు' : lang === 'hi' ? 'नाम' : 'Name', value), 'high');
+        await askCurrentQuestion('phoneNumber');
         break;
 
       case 'phoneNumber':
         setPhoneNumber(value);
         await onSaveProfile({ phoneNumber: value, phone: value });
-        await outputService.announce(`Phone number saved as ${value}.`, 'high');
-        setCurrentField('address');
-        setTimeout(() => askCurrentQuestion('address'), 1200);
+        await outputService.announce(getSavedAudioText(lang === 'te' ? 'ఫోన్ నంబర్' : lang === 'hi' ? 'फोन नंबर' : 'Phone number', value), 'high');
+        await askCurrentQuestion('address');
         break;
 
       case 'address':
         setAddress(value);
         await onSaveProfile({ address: value });
-        await outputService.announce(`Address saved.`, 'high');
-        setCurrentField('emergencyContactName');
-        setTimeout(() => askCurrentQuestion('emergencyContactName'), 1200);
+        await outputService.announce(getSavedAudioText(lang === 'te' ? 'చిరునామా' : lang === 'hi' ? 'पता' : 'Address', value), 'high');
+        await askCurrentQuestion('emergencyContactName');
         break;
 
       case 'emergencyContactName':
         setEmergencyName(value);
-        await outputService.announce(`Emergency contact name set to ${value}.`, 'high');
-        setCurrentField('emergencyContactPhone');
-        setTimeout(() => askCurrentQuestion('emergencyContactPhone'), 1200);
+        await outputService.announce(getSavedAudioText(lang === 'te' ? 'అత్యవసర కాంటాక్ట్ పేరు' : lang === 'hi' ? 'आपातकालीन नाम' : 'Emergency contact name', value), 'high');
+        await askCurrentQuestion('emergencyContactPhone');
         break;
 
       case 'emergencyContactPhone':
         setEmergencyPhone(value);
-        await outputService.announce(`Emergency phone set to ${value}.`, 'high');
-        setCurrentField('emergencyContactRelation');
-        setTimeout(() => askCurrentQuestion('emergencyContactRelation'), 1200);
+        await outputService.announce(getSavedAudioText(lang === 'te' ? 'అత్యవసర ఫోన్' : lang === 'hi' ? 'आपातकालीन फोन' : 'Emergency phone', value), 'high');
+        await askCurrentQuestion('emergencyContactRelation');
         break;
 
       case 'emergencyContactRelation': {
@@ -264,14 +307,14 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
           emergencyContact: contactObj,
         });
 
-        await outputService.announce(`Emergency contact complete.`, 'high');
-        setCurrentField('guardianChoice');
-        setTimeout(() => askCurrentQuestion('guardianChoice'), 1200);
+        const completeMsg = lang === 'te' ? 'అత్యవసర కాంటాక్ట్ వివరాలు పూర్తయ్యాయి.' : lang === 'hi' ? 'आपातकालीन संपर्क पूरा हुआ।' : 'Emergency contact complete.';
+        await outputService.announce(completeMsg, 'high');
+        await askCurrentQuestion('guardianChoice');
         break;
       }
 
       case 'guardianChoice': {
-        const isLinked = value.toLowerCase().includes('link');
+        const isLinked = value.toLowerCase().includes('link') || value.toLowerCase().includes('లింక్');
         setGuardianLinked(isLinked);
         const guardianObj: GuardianState = {
           guardianLinked: isLinked,
@@ -281,37 +324,18 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
           guardianLinked: isLinked,
         });
 
-        await outputService.announce(`Guardian settings saved.`, 'high');
-        setCurrentField('review');
-        setTimeout(() => askCurrentQuestion('review'), 1200);
+        const guardianMsg = lang === 'te' ? 'గార్డియన్ వివరాలు సేవ్ చేయబడ్డాయి.' : lang === 'hi' ? 'अभिभावक सेटिंग्स सहेजी गईं।' : 'Guardian settings saved.';
+        await outputService.announce(guardianMsg, 'high');
+        await askCurrentQuestion('review');
         break;
       }
 
-      case 'review':
-        await outputService.announce(`Profile setup complete. Entering Visual Assistant mode.`, 'high');
+      case 'review': {
+        const finishMsg = lang === 'te' ? 'ప్రొఫైల్ సెటప్ పూర్తయింది. విజువల్ అసిస్టెంట్ ప్రారంభమవుతోంది.' : lang === 'hi' ? 'प्रोफ़ाइल सेटअप पूरा हुआ।' : 'Profile setup complete. Entering Visual Assistant mode.';
+        await outputService.announce(finishMsg, 'high');
         await onComplete();
         break;
-    }
-  };
-
-  const getFieldLabel = (field: VoiceRegistrationField): string => {
-    switch (field) {
-      case 'fullName':
-        return 'full name';
-      case 'phoneNumber':
-        return 'phone number';
-      case 'address':
-        return 'address or city';
-      case 'emergencyContactName':
-        return 'emergency contact name';
-      case 'emergencyContactPhone':
-        return 'emergency contact phone number';
-      case 'emergencyContactRelation':
-        return 'relationship';
-      case 'guardianChoice':
-        return 'guardian choice';
-      case 'review':
-        return 'profile review';
+      }
     }
   };
 
@@ -355,11 +379,11 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.questionTitle, { color: palette.primaryText }]}>
-                {pendingValue ? `Recognized: "${pendingValue}"` : getFieldPrompt(currentField)}
+                {pendingValue ? `Recognized: "${pendingValue}"` : getQuestionText(currentField)}
               </Text>
               <Text style={[styles.questionSubtitle, { color: palette.secondaryText }]}>
                 {pendingValue
-                  ? 'Waiting 2s pause to auto-save and continue...'
+                  ? 'Waiting 4s pause to auto-save and continue...'
                   : 'Microphone active. Speak out loud now.'}
               </Text>
             </View>
@@ -369,7 +393,7 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
         {/* LARGE INTERACTIVE MIC TARGET CARD */}
         <TouchableOpacity
           accessible={true}
-          accessibilityLabel={`Microphone active. Speak your ${getFieldLabel(currentField)}`}
+          accessibilityLabel={`Microphone active.`}
           accessibilityRole="button"
           activeOpacity={0.85}
           onPress={() => startMicListener()}
@@ -386,53 +410,41 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
             {isListening ? 'MICROPHONE ACTIVE (SPEAK NOW)' : pendingValue ? `SAVING: "${pendingValue}"` : 'TAP OR SPEAK ANSWER'}
           </Text>
           <Text style={[styles.voiceSubtext, { color: palette.secondaryText }]}>
-            {pendingValue ? 'Auto-submitting in 2s...' : `Listening for your ${getFieldLabel(currentField)}...`}
+            {pendingValue ? 'Auto-submitting in 4s...' : 'Listening for your answer...'}
           </Text>
         </TouchableOpacity>
 
-        {/* COLLECTED PROFILE SUMMARY CARD */}
+        {/* FULL COLLECTED PROFILE SUMMARY CARD */}
         <View style={[styles.summaryCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
           <Text style={[styles.summaryTitle, { color: palette.secondaryText }]}>
-            COLLECTED PROFILE INFORMATION
+            COMPLETE COLLECTED PROFILE INFORMATION
           </Text>
           <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
-            • Name: <Text style={{ fontWeight: fullName ? '700' : '400' }}>{fullName || '—'}</Text>
+            • Full Name: <Text style={{ fontWeight: fullName ? '700' : '400' }}>{fullName || '—'}</Text>
           </Text>
           <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
-            • Phone: <Text style={{ fontWeight: phoneNumber ? '700' : '400' }}>{phoneNumber || '—'}</Text>
+            • Mobile Phone: <Text style={{ fontWeight: phoneNumber ? '700' : '400' }}>{phoneNumber || '—'}</Text>
           </Text>
           <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
-            • Address: <Text style={{ fontWeight: address ? '700' : '400' }}>{address || '—'}</Text>
+            • Address / City: <Text style={{ fontWeight: address ? '700' : '400' }}>{address || '—'}</Text>
           </Text>
           <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
-            • Emergency Contact: <Text style={{ fontWeight: emergencyName ? '700' : '400' }}>{emergencyName ? `${emergencyName} (${emergencyPhone})` : '—'}</Text>
+            • Emergency Contact Name: <Text style={{ fontWeight: emergencyName ? '700' : '400' }}>{emergencyName || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Emergency Contact Phone: <Text style={{ fontWeight: emergencyPhone ? '700' : '400' }}>{emergencyPhone || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Relationship: <Text style={{ fontWeight: emergencyRelation ? '700' : '400' }}>{emergencyRelation || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Guardian Link Status: <Text style={{ fontWeight: guardianLinked ? '700' : '400' }}>{guardianLinked ? 'Linked' : 'Setup Later'}</Text>
           </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-function getFieldPrompt(field: VoiceRegistrationField): string {
-  switch (field) {
-    case 'fullName':
-      return 'What is your full name?';
-    case 'phoneNumber':
-      return 'What is your mobile phone number?';
-    case 'address':
-      return 'What is your city or address?';
-    case 'emergencyContactName':
-      return 'What is your emergency contact name?';
-    case 'emergencyContactPhone':
-      return "What is your emergency contact's phone?";
-    case 'emergencyContactRelation':
-      return 'What is their relationship to you?';
-    case 'guardianChoice':
-      return 'Would you like to link a guardian now?';
-    case 'review':
-      return 'Review your profile and confirm.';
-  }
-}
 
 const styles = StyleSheet.create({
   container: {
