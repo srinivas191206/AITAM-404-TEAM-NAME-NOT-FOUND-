@@ -1,4 +1,4 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 */node_modules/
 
@@ -11,13 +11,12 @@ build/
 */.expo/
 web-build/
 
-# Environment files
-.env
-*/.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Environment and Secrets files
+.env*
+*/.env*
+*.local.ts
+*groqKeys.local.ts
+*keys.local.ts
 
 # Native build artifacts
 android/

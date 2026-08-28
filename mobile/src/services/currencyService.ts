@@ -1,6 +1,7 @@
 ﻿import { CameraFrameResult } from './cameraService';
 import { imageAnalyzer, ColorHistogram } from '../utils/imageAnalyzer';
 import { NativeVisionBridge } from './nativeVisionBridge';
+import { groqVisionService } from './groqVisionService';
 
 export type CurrencyDenomination = 10 | 20 | 50 | 100 | 200 | 500 | 2000;
 
@@ -111,9 +112,6 @@ class CurrencyService {
     return this.confidenceThreshold;
   }
 
-  /**
-   * Extract INR denomination numeral or text from OCR string
-   */
   public extractDenominationFromText(rawText: string): CurrencyDenomination | null {
     if (!rawText) return null;
     const text = rawText.toUpperCase();
@@ -129,21 +127,16 @@ class CurrencyService {
     return null;
   }
 
-  /**
-   * Real On-Device INR Multi-Spectral Colorimetric & Dimensional Classifier
-   */
   public classifyNoteFromHistogram(hist: ColorHistogram): {
     denomination: CurrencyDenomination | null;
     confidence: number;
   } {
     const { avgHue, avgSaturation, avgLightness, avgRed, avgGreen, avgBlue } = hist;
 
-    // Reject extremely dark (pitch black) or blown out white scenes
     if (avgLightness < 0.12 || avgLightness > 0.92) {
       return { denomination: null, confidence: 0.1 };
     }
 
-    // 1. ₹500 (Stone Grey): Low saturation (< 0.22), balanced R/G/B, medium luminance
     if (avgSaturation < 0.22 && avgLightness >= 0.25 && avgLightness <= 0.78) {
       const diffRG = Math.abs(avgRed - avgGreen);
       const diffGB = Math.abs(avgGreen - avgBlue);
@@ -152,37 +145,30 @@ class CurrencyService {
       }
     }
 
-    // 2. ₹100 (Lavender / Violet): Hue 230 - 290
     if (avgHue >= 230 && avgHue <= 290 && avgSaturation > 0.15) {
       return { denomination: 100, confidence: 0.91 };
     }
 
-    // 3. ₹50 (Fluorescent Blue / Cyan): Hue 170 - 229
     if (avgHue >= 170 && avgHue < 230 && avgSaturation > 0.15) {
       return { denomination: 50, confidence: 0.92 };
     }
 
-    // 4. ₹200 (Bright Yellow): Hue 42 - 65, high saturation
     if (avgHue >= 42 && avgHue <= 65 && avgSaturation > 0.25) {
       return { denomination: 200, confidence: 0.89 };
     }
 
-    // 5. ₹20 (Greenish Yellow): Hue 66 - 130
     if (avgHue > 65 && avgHue <= 130 && avgSaturation > 0.15) {
       return { denomination: 20, confidence: 0.88 };
     }
 
-    // 6. ₹10 (Chocolate Brown): Hue 10 - 41, warm tones, darker luminance
     if (avgHue >= 10 && avgHue < 42 && avgRed > avgBlue) {
       return { denomination: 10, confidence: 0.90 };
     }
 
-    // 7. ₹2000 (Magenta / Pink): Hue 295 - 355
     if (avgHue >= 295 && avgHue <= 355 && avgSaturation > 0.20) {
       return { denomination: 2000, confidence: 0.87 };
     }
 
-    // Default fallback to closest match if within general note boundary
     if (avgSaturation < 0.25) {
       return { denomination: 500, confidence: 0.75 };
     }
@@ -207,7 +193,7 @@ class CurrencyService {
   }
 
   /**
-   * Execute Dual-Signal Currency Recognition (ML Kit OCR + Multi-Spectral Color Profile)
+   * Multi-Model Currency Recognition: Groq LLaMA-3.2 Vision + Native ML Kit OCR + Spectral Colorimeter
    */
   public async identifyCurrency(frame: CameraFrameResult): Promise<CurrencyProcessingResult> {
     const startTime = Date.now();
@@ -224,7 +210,30 @@ class CurrencyService {
     try {
       this.isProcessing = true;
 
-      // SIGNAL 1: Real Native ML Kit OCR Numeral Extraction
+      // 1. Try Ultra-Fast Groq Vision with 10-Key Auto-Rotation
+      if (frame.base64) {
+        const groqResult = await groqVisionService.identifyCurrency(frame.base64);
+        if (groqResult && !groqResult.includes("couldn't identify")) {
+          const denomination = this.extractDenominationFromText(groqResult);
+          if (denomination) {
+            const spokenText = this.generateSpokenResponse(denomination, 0.99);
+            return {
+              success: true,
+              message: spokenText,
+              currencyResult: {
+                currency: 'INR',
+                denomination,
+                confidence: 0.99,
+                detectedType: 'NOTE',
+                spokenText,
+              },
+              inferenceTimeMs: Date.now() - startTime,
+            };
+          }
+        }
+      }
+
+      // 2. On-Device Fallback: Native ML Kit OCR Numeral Extraction
       let ocrDenomination: CurrencyDenomination | null = null;
       let rawDetectedText = '';
 
@@ -234,21 +243,19 @@ class CurrencyService {
         ocrDenomination = this.extractDenominationFromText(nativeOcr.text);
       }
 
-      // SIGNAL 2: Multi-Spectral Color & Pixel Histogram Analysis
+      // 3. Multi-Spectral Color & Pixel Histogram Analysis
       const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
       const colorClassification = this.classifyNoteFromHistogram(analysis.histogram);
 
-      // FUSION & DUAL-SIGNAL VERIFICATION
+      // FUSION
       let finalDenomination: CurrencyDenomination | null = null;
       let finalConfidence = 0.0;
 
       if (ocrDenomination && colorClassification.denomination) {
         if (ocrDenomination === colorClassification.denomination) {
-          // Dual agreement -> Maximum confidence
           finalDenomination = ocrDenomination;
           finalConfidence = 0.99;
         } else {
-          // Priority to OCR text recognition with solid confidence
           finalDenomination = ocrDenomination;
           finalConfidence = 0.94;
         }
@@ -280,12 +287,6 @@ class CurrencyService {
         spokenText,
         detectedColor: analysis.histogram.dominantColor,
         detectedText: rawDetectedText,
-        boundingBox: {
-          x: Math.round((frame.width || 1080) * 0.1),
-          y: Math.round((frame.height || 1920) * 0.25),
-          width: Math.round((frame.width || 1080) * 0.8),
-          height: Math.round((frame.height || 1920) * 0.5),
-        },
       };
 
       const inferenceTimeMs = Date.now() - startTime;
