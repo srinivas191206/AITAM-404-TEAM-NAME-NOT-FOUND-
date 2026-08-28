@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,16 @@ import {
   StatusBar,
   ScrollView,
   TouchableOpacity,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
-import { InteractionState } from '../../types';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
-import { AccessibleButton } from '../../components/AccessibleButton';
-import { outputService } from '../../services/outputService';
+import { ttsService } from '../../services/ttsService';
 import { hapticService } from '../../services/hapticService';
+import { speechRecognitionService } from '../../services/speechRecognitionService';
+
+export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
 
 interface VisualDashboardShellProps {
   onOpenSettings: () => void;
@@ -22,37 +25,218 @@ interface VisualDashboardShellProps {
 export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   onOpenSettings,
 }) => {
-  const [interactionState, setInteractionState] = useState<InteractionState>('ready');
-  const [placeholderMessage, setPlaceholderMessage] = useState<string>(
+  const [voiceState, setVoiceState] = useState<VoiceState>('READY');
+  const [transcript, setTranscript] = useState<string>('');
+  const [responseMessage, setResponseMessage] = useState<string>(
     'Voice assistant ready. Tap the microphone area to speak.'
   );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleMicTap = async () => {
-    if (interactionState === 'ready') {
-      await hapticService.medium();
-      setInteractionState('listening');
-      setPlaceholderMessage('Listening for your command...');
-      outputService.announce('Listening.');
+  const isMountedRef = useRef(true);
 
-      setTimeout(async () => {
-        setInteractionState('processing');
-        setPlaceholderMessage('Processing voice intent...');
+  useEffect(() => {
+    isMountedRef.current = true;
 
-        setTimeout(() => {
-          setInteractionState('ready');
-          const responseText = 'Voice recognition module will be connected in Phase 3.';
-          setPlaceholderMessage(responseText);
-          outputService.announce(responseText);
-        }, 1200);
-      }, 1500);
+    // App state listener to stop audio on background/minimize
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      isMountedRef.current = false;
+      subscription.remove();
+      cleanupAudio();
+    };
+  }, []);
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'background' || nextAppState === 'inactive') {
+      cleanupAudio();
     }
   };
 
-  const handlePlaceholderAction = async (featureName: string) => {
+  const cleanupAudio = async () => {
+    await speechRecognitionService.stopListening();
+    await ttsService.stop();
+    if (isMountedRef.current) {
+      setVoiceState('READY');
+    }
+  };
+
+  /**
+   * Handle primary Microphone activation
+   */
+  const handleMicrophonePress = async () => {
+    // 1. Interrupt any active TTS or ongoing speech
+    if (ttsService.getSpeakingState()) {
+      await ttsService.stop();
+    }
+
+    // If currently listening, tapping stops listening
+    if (voiceState === 'LISTENING') {
+      await hapticService.light();
+      await speechRecognitionService.stopListening();
+      setVoiceState('READY');
+      setResponseMessage('Listening cancelled. Voice assistant ready.');
+      return;
+    }
+
+    // 2. Light haptic feedback for mic activation
     await hapticService.light();
-    const msg = `${featureName} module will be connected in a future phase.`;
-    setPlaceholderMessage(msg);
-    outputService.announce(msg);
+    setErrorMessage(null);
+    setVoiceState('LISTENING');
+    setTranscript('');
+    setResponseMessage('Listening...');
+
+    // 3. Start controlled listening session
+    const started = await speechRecognitionService.startListening({
+      onStart: () => {
+        if (isMountedRef.current) {
+          setVoiceState('LISTENING');
+        }
+      },
+      onResult: (spokenText: string) => {
+        if (isMountedRef.current) {
+          processSpokenTranscript(spokenText);
+        }
+      },
+      onError: (err: string) => {
+        if (isMountedRef.current) {
+          handleVoiceError(err);
+        }
+      },
+      onSilenceTimeout: () => {
+        if (isMountedRef.current) {
+          handleSilenceTimeout();
+        }
+      },
+    });
+
+    if (!started) {
+      // Permission or init failure handled inside onError
+    }
+  };
+
+  /**
+   * Process recognized speech transcript through Phase 4.1 Temporary Response System
+   */
+  const processSpokenTranscript = async (rawTranscript: string) => {
+    await hapticService.medium();
+    setVoiceState('PROCESSING');
+    setTranscript(rawTranscript);
+    setResponseMessage('Processing recognized speech...');
+
+    // Small processing pause to mimic natural speech turn
+    setTimeout(async () => {
+      if (!isMountedRef.current) return;
+
+      const normalized = rawTranscript.trim().toLowerCase();
+      let responseText = '';
+
+      // Phase 4.1 Temporary Response Rules
+      if (normalized === 'hello' || normalized.startsWith('hello') || normalized === 'hi') {
+        responseText = "Hello. I'm listening.";
+      } else if (
+        normalized.includes('how are you') ||
+        normalized.includes('how are you doing')
+      ) {
+        responseText = "I'm doing well. How can I help you?";
+      } else {
+        responseText = 'I heard you. Intelligent commands will be connected next.';
+      }
+
+      setResponseMessage(responseText);
+      setVoiceState('RESPONDING');
+
+      // Speak response aloud via TTS
+      await ttsService.speak(responseText, {
+        onDone: async () => {
+          if (isMountedRef.current) {
+            await hapticService.light();
+            setVoiceState('READY');
+          }
+        },
+        onError: () => {
+          if (isMountedRef.current) {
+            setVoiceState('READY');
+          }
+        },
+      });
+    }, 400);
+  };
+
+  /**
+   * Handle silence timeout
+   */
+  const handleSilenceTimeout = async () => {
+    await hapticService.error();
+    setVoiceState('ERROR');
+    const msg = "I didn't hear anything. Please try again.";
+    setErrorMessage(msg);
+    setResponseMessage(msg);
+
+    await ttsService.speak(msg, {
+      onDone: () => {
+        if (isMountedRef.current) {
+          setVoiceState('READY');
+        }
+      },
+    });
+  };
+
+  /**
+   * Handle speech & permission errors gracefully
+   */
+  const handleVoiceError = async (errType: string) => {
+    await hapticService.error();
+    setVoiceState('ERROR');
+
+    let spokenError = '';
+
+    if (errType === 'permission_denied' || errType === 'permission_permanently_denied') {
+      spokenError =
+        "I can't access the microphone. You can enable microphone access in your phone settings.";
+    } else if (errType === 'silence_timeout' || errType === 'no_speech_detected') {
+      spokenError = "I didn't hear anything. Please try again.";
+    } else {
+      spokenError = "I couldn't understand that. Please try again.";
+    }
+
+    setErrorMessage(spokenError);
+    setResponseMessage(spokenError);
+
+    await ttsService.speak(spokenError, {
+      onDone: () => {
+        if (isMountedRef.current) {
+          setVoiceState('READY');
+        }
+      },
+    });
+  };
+
+  /**
+   * Test speech simulation trigger (for automated and physical testing)
+   */
+  const triggerSimulation = (phrase: string) => {
+    if (phrase === '__SILENCE__') {
+      handleSilenceTimeout();
+    } else {
+      processSpokenTranscript(phrase);
+    }
+  };
+
+  const getStateAccessibilityLabel = () => {
+    switch (voiceState) {
+      case 'LISTENING':
+        return 'Assistant is listening. Speak your voice command.';
+      case 'PROCESSING':
+        return 'Assistant is processing your voice.';
+      case 'RESPONDING':
+        return `Assistant is speaking: ${responseMessage}`;
+      case 'ERROR':
+        return `Assistant error: ${errorMessage || responseMessage}`;
+      case 'READY':
+      default:
+        return 'Assistant is ready. Tap the microphone area to speak.';
+    }
   };
 
   return (
@@ -60,7 +244,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* CALM HEADER */}
+        {/* CALM ACCESSIBLE HEADER */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>👁️ Visual Assistant</Text>
@@ -69,115 +253,141 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           <TouchableOpacity
             accessible={true}
             accessibilityLabel="Open Settings"
+            accessibilityHint="Double tap to open profile and app settings"
             accessibilityRole="button"
-            onPress={onOpenSettings}
+            onPress={async () => {
+              await cleanupAudio();
+              onOpenSettings();
+            }}
             style={styles.settingsIconBtn}
           >
             <Text style={styles.settingsIcon}>⚙️</Text>
           </TouchableOpacity>
         </View>
 
-        {/* STATUS HUD & ASSISTANT STATE INDICATOR */}
-        <View style={styles.statusBox}>
+        {/* LOGICAL STATE HUD */}
+        <View
+          accessible={true}
+          accessibilityLabel={getStateAccessibilityLabel()}
+          style={[
+            styles.statusBox,
+            voiceState === 'LISTENING' && styles.statusBoxListening,
+            voiceState === 'ERROR' && styles.statusBoxError,
+          ]}
+        >
           <View style={styles.stateIndicatorRow}>
             <View
               style={[
                 styles.stateDot,
-                interactionState === 'listening'
-                  ? styles.dotListening
-                  : interactionState === 'processing'
-                  ? styles.dotProcessing
-                  : styles.dotReady,
+                voiceState === 'LISTENING' && styles.dotListening,
+                voiceState === 'PROCESSING' && styles.dotProcessing,
+                voiceState === 'RESPONDING' && styles.dotResponding,
+                voiceState === 'ERROR' && styles.dotError,
+                voiceState === 'READY' && styles.dotReady,
               ]}
             />
-            <Text style={styles.stateLabel}>
-              {interactionState === 'listening'
-                ? 'STATE: LISTENING'
-                : interactionState === 'processing'
-                ? 'STATE: PROCESSING'
-                : 'STATE: READY'}
-            </Text>
+            <Text style={styles.stateLabel}>STATE: {voiceState}</Text>
           </View>
-          <Text style={styles.statusMessage}>{placeholderMessage}</Text>
+          <Text style={styles.statusMessage}>{responseMessage}</Text>
         </View>
 
         {/* LARGE ACCESSIBLE MICROPHONE TOUCH AREA */}
         <TouchableOpacity
           accessible={true}
           accessibilityLabel={
-            interactionState === 'listening'
-              ? 'Listening for command'
-              : 'Tap to speak voice command'
+            voiceState === 'LISTENING'
+              ? 'Microphone is active. Tap to cancel listening.'
+              : 'Voice assistant. Activate microphone.'
           }
-          accessibilityHint="Double tap to trigger voice assistant"
+          accessibilityHint="Double tap to speak to the assistant"
           accessibilityRole="button"
           activeOpacity={0.8}
-          onPress={handleMicTap}
+          onPress={handleMicrophonePress}
           style={[
             styles.micArea,
-            interactionState === 'listening'
-              ? styles.micAreaListening
-              : interactionState === 'processing'
-              ? styles.micAreaProcessing
-              : styles.micAreaReady,
+            voiceState === 'LISTENING' && styles.micAreaListening,
+            voiceState === 'PROCESSING' && styles.micAreaProcessing,
+            voiceState === 'RESPONDING' && styles.micAreaResponding,
+            voiceState === 'ERROR' && styles.micAreaError,
           ]}
         >
-          <Text style={styles.micIcon}>🎙️</Text>
-          <Text style={styles.micMainText}>
-            {interactionState === 'listening'
+          <View style={styles.micIconCircle}>
+            <Text style={styles.micEmoji}>🎙️</Text>
+          </View>
+          <Text style={styles.micTitle}>
+            {voiceState === 'LISTENING'
               ? 'LISTENING...'
-              : interactionState === 'processing'
+              : voiceState === 'PROCESSING'
               ? 'PROCESSING...'
+              : voiceState === 'RESPONDING'
+              ? 'SPEAKING RESPONSE'
+              : voiceState === 'ERROR'
+              ? 'TAP TO RETRY'
               : 'TAP TO SPEAK'}
           </Text>
-          <Text style={styles.micSubtext}>
-            {interactionState === 'ready' ? 'Say: "What\'s in front of me?"' : 'Speak clearly'}
+          <Text style={styles.micSubtitle}>
+            {voiceState === 'LISTENING'
+              ? 'Say "Hello" or "How are you?"'
+              : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
 
-        {/* ACCESSIBLE ACTION SHORTCUT PLACEHOLDERS */}
-        <View style={styles.actionsList}>
-          <Text style={styles.actionsHeader}>ACCESSIBILITY ACTIONS</Text>
+        {/* RECOGNIZED TRANSCRIPT DISPLAY */}
+        {transcript ? (
+          <View
+            accessible={true}
+            accessibilityLabel={`Recognized speech: ${transcript}`}
+            style={styles.transcriptCard}
+          >
+            <Text style={styles.transcriptLabel}>RECOGNIZED SPEECH:</Text>
+            <Text style={styles.transcriptText}>"{transcript}"</Text>
+          </View>
+        ) : null}
 
-          <AccessibleButton
-            title="🔍 What's in front of me?"
-            size="large"
-            variant="primary"
-            accessibilityHint="Analyzes camera scene"
-            onPress={() => handlePlaceholderAction('Camera Scene Understanding')}
-          />
+        {/* ACCESSIBILITY SPEECH TESTING TRAY (FOR VERIFICATION) */}
+        <View style={styles.testTray}>
+          <Text style={styles.testTrayLabel}>TEST VOICE INTERACTION (SIMULATION):</Text>
+          <View style={styles.testChipsRow}>
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Simulate saying Hello"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Hello')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Hello"</Text>
+            </TouchableOpacity>
 
-          <AccessibleButton
-            title="📄 Read Text / Document"
-            size="large"
-            variant="secondary"
-            accessibilityHint="Reads visible document text"
-            onPress={() => handlePlaceholderAction('OCR Text Reader')}
-          />
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Simulate saying How are you"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('How are you?')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"How are you?"</Text>
+            </TouchableOpacity>
 
-          <AccessibleButton
-            title="💵 Currency Recognition"
-            size="large"
-            variant="secondary"
-            accessibilityHint="Identifies banknote denomination"
-            onPress={() => handlePlaceholderAction('Currency Recognition')}
-          />
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Simulate saying What time is it"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('What time is it?')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"What time is it?"</Text>
+            </TouchableOpacity>
 
-          <AccessibleButton
-            title="🧭 Voice Navigation"
-            size="large"
-            variant="secondary"
-            accessibilityHint="Opens turn-by-turn walking guidance"
-            onPress={() => handlePlaceholderAction('Pedestrian Navigation')}
-          />
-
-          <AccessibleButton
-            title="🚨 Emergency SOS"
-            size="large"
-            variant="danger"
-            accessibilityHint="Triggers emergency SOS dispatch"
-            onPress={() => handlePlaceholderAction('Emergency SOS')}
-          />
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Simulate silence timeout"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('__SILENCE__')}
+              style={[styles.testChip, styles.testChipSilence]}
+            >
+              <Text style={styles.testChipText}>Silence Timeout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -192,50 +402,61 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xxxl,
+    gap: Spacing.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    paddingVertical: Spacing.xs,
   },
   headerLeft: {
     flex: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: Colors.blindPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   headerGreeting: {
-    fontSize: 16,
-    color: Colors.textHighEmphasis,
+    fontSize: 15,
     fontWeight: '600',
+    color: Colors.textMediumEmphasis,
     marginTop: 2,
   },
   settingsIconBtn: {
-    padding: Spacing.sm,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusSm,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingsIcon: {
-    fontSize: 20,
+    fontSize: 22,
   },
   statusBox: {
     backgroundColor: Colors.surfaceElevated,
     borderRadius: Spacing.radiusMd,
     padding: Spacing.md,
-    marginBottom: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
+  },
+  statusBoxListening: {
+    borderColor: Colors.blindPrimary,
+    backgroundColor: '#1E1A14',
+  },
+  statusBoxError: {
+    borderColor: Colors.danger,
+    backgroundColor: '#201212',
   },
   stateIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: Spacing.xs,
   },
   stateDot: {
     width: 10,
@@ -244,72 +465,138 @@ const styles = StyleSheet.create({
     marginRight: Spacing.xs + 2,
   },
   dotReady: {
-    backgroundColor: Colors.blindPrimary,
+    backgroundColor: '#EAB308',
   },
   dotListening: {
-    backgroundColor: Colors.danger,
+    backgroundColor: '#22C55E',
   },
   dotProcessing: {
-    backgroundColor: Colors.warning,
+    backgroundColor: '#3B82F6',
+  },
+  dotResponding: {
+    backgroundColor: Colors.blindPrimary,
+  },
+  dotError: {
+    backgroundColor: Colors.danger,
   },
   stateLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
+    color: Colors.textMediumEmphasis,
+    letterSpacing: 0.8,
   },
   statusMessage: {
     fontSize: 15,
-    color: Colors.textHighEmphasis,
     fontWeight: '600',
+    color: Colors.textHighEmphasis,
     lineHeight: 22,
   },
   micArea: {
+    backgroundColor: Colors.surfaceElevated,
     borderRadius: Spacing.radiusLg,
-    paddingVertical: Spacing.xxl,
-    paddingHorizontal: Spacing.lg,
+    padding: Spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xl,
-    minHeight: Spacing.massiveTouchTarget,
-    borderWidth: 3,
-  },
-  micAreaReady: {
-    backgroundColor: Colors.blindPrimary,
-    borderColor: Colors.blindBorder,
+    borderWidth: 2,
+    borderColor: Colors.borderSubtle,
+    minHeight: 180,
   },
   micAreaListening: {
-    backgroundColor: Colors.danger,
-    borderColor: '#B91C1C',
+    borderColor: '#22C55E',
+    backgroundColor: '#142217',
   },
   micAreaProcessing: {
-    backgroundColor: Colors.warning,
-    borderColor: '#B45309',
+    borderColor: '#3B82F6',
+    backgroundColor: '#131A26',
   },
-  micIcon: {
-    fontSize: 48,
-    marginBottom: 6,
+  micAreaResponding: {
+    borderColor: Colors.blindPrimary,
+    backgroundColor: '#231B10',
   },
-  micMainText: {
-    color: '#121110',
-    fontSize: 24,
-    fontWeight: '800',
+  micAreaError: {
+    borderColor: Colors.danger,
+    backgroundColor: '#241212',
+  },
+  micIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.surfaceInteractive,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  micEmoji: {
+    fontSize: 32,
+  },
+  micTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: Colors.textHighEmphasis,
     letterSpacing: 0.5,
   },
-  micSubtext: {
-    color: '#382806',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 4,
+  micSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textMediumEmphasis,
+    marginTop: Spacing.xs,
   },
-  actionsList: {
-    gap: Spacing.xs,
+  transcriptCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: Spacing.radiusMd,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
   },
-  actionsHeader: {
-    fontSize: 13,
+  transcriptLabel: {
+    fontSize: 11,
     fontWeight: '800',
     color: Colors.blindPrimary,
     letterSpacing: 0.5,
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
+  },
+  transcriptText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textHighEmphasis,
+    lineHeight: 24,
+  },
+  testTray: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: Spacing.radiusMd,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    marginTop: Spacing.xs,
+  },
+  testTrayLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textMediumEmphasis,
+    letterSpacing: 0.5,
+    marginBottom: Spacing.sm,
+  },
+  testChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs + 2,
+  },
+  testChip: {
+    backgroundColor: Colors.surfaceInteractive,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Spacing.radiusSm,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  testChipSilence: {
+    borderColor: '#78350F',
+  },
+  testChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textHighEmphasis,
   },
 });
