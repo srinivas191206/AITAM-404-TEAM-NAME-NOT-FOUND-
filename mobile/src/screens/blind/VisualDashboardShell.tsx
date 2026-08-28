@@ -10,6 +10,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
+import { CameraView } from 'expo-camera';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { ttsService } from '../../services/ttsService';
@@ -17,6 +18,9 @@ import { hapticService } from '../../services/hapticService';
 import { speechRecognitionService } from '../../services/speechRecognitionService';
 import { commandRouter, CommandRouteResult } from '../../services/commandRouter';
 import { RecognizedIntentType } from '../../services/intentService';
+import { visionService } from '../../services/visionService';
+import { cameraService } from '../../services/cameraService';
+import { VisionCameraPreview } from '../../components/camera/VisionCameraPreview';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
 
@@ -34,32 +38,49 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     'Voice assistant ready. Tap the microphone area to speak.'
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
 
   const isMountedRef = useRef(true);
+  const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
 
-    // App state listener to stop audio on background/minimize
+    // Register VisionService capture delegate & visibility listener
+    visionService.registerCaptureDelegate(async () => {
+      return await cameraService.captureFrameFromRef(cameraRef);
+    });
+
+    visionService.registerVisibilityListener((visible: boolean) => {
+      if (isMountedRef.current) {
+        setIsCameraActive(visible);
+      }
+    });
+
+    // App state listener to stop audio & camera on background/minimize
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
       isMountedRef.current = false;
       subscription.remove();
-      cleanupAudio();
+      visionService.registerCaptureDelegate(null);
+      visionService.registerVisibilityListener(null);
+      cleanupAllResources();
     };
   }, []);
 
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (nextAppState === 'background' || nextAppState === 'inactive') {
-      cleanupAudio();
+      cleanupAllResources();
     }
   };
 
-  const cleanupAudio = async () => {
+  const cleanupAllResources = async () => {
     await speechRecognitionService.stopListening();
     await ttsService.stop();
+    visionService.closeCamera();
     if (isMountedRef.current) {
+      setIsCameraActive(false);
       setVoiceState('READY');
     }
   };
@@ -119,7 +140,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   /**
-   * Process spoken command through Phase 4.2 Intent Understanding & Command Router
+   * Process spoken command through Phase 4/5 Intent Understanding & Command Router
    */
   const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
@@ -138,6 +159,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     // If STOP was commanded, interrupt and reset immediately
     if (routeResult.isActionInterrupted) {
       await hapticService.success();
+      visionService.closeCamera();
+      setIsCameraActive(false);
       setVoiceState('READY');
       return;
     }
@@ -156,11 +179,20 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       onDone: async () => {
         if (isMountedRef.current) {
           await hapticService.light();
+          // Pause camera after vision perception query completes
+          if (routeResult.intent === 'VISION_QUERY') {
+            visionService.closeCamera();
+            setIsCameraActive(false);
+          }
           setVoiceState('READY');
         }
       },
       onError: () => {
         if (isMountedRef.current) {
+          if (routeResult.intent === 'VISION_QUERY') {
+            visionService.closeCamera();
+            setIsCameraActive(false);
+          }
           setVoiceState('READY');
         }
       },
@@ -260,7 +292,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             accessibilityHint="Double tap to open profile and app settings"
             accessibilityRole="button"
             onPress={async () => {
-              await cleanupAudio();
+              await cleanupAllResources();
               onOpenSettings();
             }}
             style={styles.settingsIconBtn}
@@ -294,6 +326,17 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </View>
           <Text style={styles.statusMessage}>{responseMessage}</Text>
         </View>
+
+        {/* CAMERA PERCEPTION PREVIEW VIEWPORT */}
+        <VisionCameraPreview
+          cameraRef={cameraRef}
+          isActive={isCameraActive}
+          onCameraReady={() => cameraService.setCameraReady(true)}
+          onMountError={(err) => {
+            console.warn('[VisualDashboardShell] Camera error:', err);
+            cameraService.setCameraReady(false);
+          }}
+        />
 
         {/* LARGE ACCESSIBLE MICROPHONE TOUCH AREA */}
         <TouchableOpacity
@@ -355,7 +398,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </View>
         ) : null}
 
-        {/* TEST MATRIX TRAY (PHASE 4.2 TEST COMMANDS) */}
+        {/* TEST MATRIX TRAY (PHASE 4 & 5 TEST COMMANDS) */}
         <View style={styles.testTray}>
           <Text style={styles.testTrayLabel}>TEST COMMAND INTENT MATRIX:</Text>
           <View style={styles.testChipsRow}>
@@ -364,9 +407,9 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Test What's in front of me"
               accessibilityRole="button"
               onPress={() => triggerSimulation("What's in front of me?")}
-              style={styles.testChip}
+              style={[styles.testChip, styles.testChipVision]}
             >
-              <Text style={styles.testChipText}>"What's in front of me?"</Text>
+              <Text style={styles.testChipVisionText}>📷 "What's in front of me?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -374,9 +417,9 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Test What is ahead"
               accessibilityRole="button"
               onPress={() => triggerSimulation('What is ahead?')}
-              style={styles.testChip}
+              style={[styles.testChip, styles.testChipVision]}
             >
-              <Text style={styles.testChipText}>"What is ahead?"</Text>
+              <Text style={styles.testChipVisionText}>📷 "What is ahead?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -391,32 +434,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Test What does this say"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('What does this say?')}
-              style={styles.testChip}
-            >
-              <Text style={styles.testChipText}>"What does this say?"</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              accessible={true}
               accessibilityLabel="Test Describe my surroundings"
               accessibilityRole="button"
               onPress={() => triggerSimulation('Describe my surroundings.')}
               style={styles.testChip}
             >
               <Text style={styles.testChipText}>"Describe my surroundings."</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Test What's around me"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation("What's around me?")}
-              style={styles.testChip}
-            >
-              <Text style={styles.testChipText}>"What's around me?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -437,16 +460,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               style={styles.testChip}
             >
               <Text style={styles.testChipText}>"Take me to nearest hospital"</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Test Navigate to JNTU Kakinada"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('Navigate to JNTU Kakinada.')}
-              style={styles.testChip}
-            >
-              <Text style={styles.testChipText}>"Navigate to JNTU Kakinada"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -477,16 +490,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               style={styles.testChip}
             >
               <Text style={styles.testChipText}>"Repeat that."</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              accessible={true}
-              accessibilityLabel="Test Ambiguous command"
-              accessibilityRole="button"
-              onPress={() => triggerSimulation('Tell me about this.')}
-              style={styles.testChip}
-            >
-              <Text style={styles.testChipText}>"Tell me about this."</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -610,7 +613,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.borderSubtle,
-    minHeight: 180,
+    minHeight: 160,
   },
   micAreaListening: {
     borderColor: '#22C55E',
@@ -629,27 +632,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#241212',
   },
   micIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.surfaceInteractive,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
   },
   micEmoji: {
-    fontSize: 32,
+    fontSize: 28,
   },
   micTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: Colors.textHighEmphasis,
     letterSpacing: 0.5,
   },
   micSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textMediumEmphasis,
     marginTop: Spacing.xs,
@@ -720,6 +723,15 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.radiusSm,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
+  },
+  testChipVision: {
+    borderColor: Colors.blindBorder,
+    backgroundColor: Colors.blindSurface,
+  },
+  testChipVisionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.blindPrimary,
   },
   testChipUnknown: {
     borderColor: '#78350F',
