@@ -4,6 +4,7 @@ import {
   DetectionResult,
   DetectionPipelineResult,
 } from './objectDetectionService';
+import { SpatialAnalysisResult } from './spatialAwarenessService';
 
 export interface VisionFrameMetadata {
   uri: string;
@@ -16,6 +17,7 @@ export interface VisionProcessingResult {
   success: boolean;
   message: string;
   detections?: DetectionResult[];
+  spatialAnalysis?: SpatialAnalysisResult;
   frameMetadata?: VisionFrameMetadata;
   inferenceTimeMs?: number;
   error?: string;
@@ -31,6 +33,7 @@ class VisionService {
   private detectionListener: DetectionListener | null = null;
   private isCameraActive: boolean = false;
   private lastDetections: DetectionResult[] = [];
+  private lastSpatialAnalysis: SpatialAnalysisResult | null = null;
 
   /**
    * Register the active CameraView capture delegate
@@ -103,7 +106,7 @@ class VisionService {
   }
 
   /**
-   * Process camera frame through on-device Object Detection Engine (Phase 5.2)
+   * Process camera frame through on-device Object Detection & Spatial Awareness (Phase 5.3)
    */
   public async processFrame(frame: CameraFrameResult): Promise<VisionProcessingResult> {
     if (!frame || !frame.uri) {
@@ -121,11 +124,12 @@ class VisionService {
       timestamp: frame.timestamp,
     };
 
-    // Run On-Device Object Detection
+    // Run On-Device Object Detection + Spatial Awareness Pipeline
     const detectionPipeline: DetectionPipelineResult =
       await objectDetectionService.detectObjects(frame);
 
     this.lastDetections = detectionPipeline.detections;
+    this.lastSpatialAnalysis = detectionPipeline.spatialAnalysis;
 
     if (this.detectionListener) {
       this.detectionListener(detectionPipeline.detections);
@@ -135,6 +139,7 @@ class VisionService {
       success: detectionPipeline.success,
       message: detectionPipeline.spokenResponse,
       detections: detectionPipeline.detections,
+      spatialAnalysis: detectionPipeline.spatialAnalysis,
       frameMetadata,
       inferenceTimeMs: detectionPipeline.inferenceTimeMs,
       error: detectionPipeline.error,
@@ -176,7 +181,7 @@ class VisionService {
       return await this.processFrame(syntheticFrame);
     }
 
-    // 4. Process frame through On-Device Object Detection Engine
+    // 4. Process frame through On-Device Pipeline
     const result = await this.processFrame(frame);
 
     return result;
@@ -184,6 +189,10 @@ class VisionService {
 
   public getLastDetections(): DetectionResult[] {
     return this.lastDetections;
+  }
+
+  public getLastSpatialAnalysis(): SpatialAnalysisResult | null {
+    return this.lastSpatialAnalysis;
   }
 
   public getIsActive(): boolean {

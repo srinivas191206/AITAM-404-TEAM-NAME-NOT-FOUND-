@@ -20,7 +20,7 @@ import { commandRouter, CommandRouteResult } from '../../services/commandRouter'
 import { RecognizedIntentType } from '../../services/intentService';
 import { visionService } from '../../services/visionService';
 import { cameraService } from '../../services/cameraService';
-import { objectDetectionService, DetectionResult } from '../../services/objectDetectionService';
+import { DetectionResult } from '../../services/objectDetectionService';
 import { VisionCameraPreview } from '../../components/camera/VisionCameraPreview';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
@@ -150,7 +150,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   /**
-   * Process spoken command through Phase 4/5 Intent Understanding & Command Router
+   * Process spoken command through Phase 4/5 Intent Understanding, Router & Vision
    */
   const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
@@ -176,9 +176,16 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       return;
     }
 
-    // Haptic feedback based on recognition result
+    // Haptic feedback based on recognition result & spatial awareness
     if (routeResult.intent === 'UNKNOWN') {
       await hapticService.error();
+    } else if (routeResult.intent === 'VISION_QUERY') {
+      const spatial = visionService.getLastSpatialAnalysis();
+      if (spatial && spatial.hasMovementRelevantObstacle) {
+        await hapticService.medium();
+      } else {
+        await hapticService.light();
+      }
     } else {
       await hapticService.success();
     }
