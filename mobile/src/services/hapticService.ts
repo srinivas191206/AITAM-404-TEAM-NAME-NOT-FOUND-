@@ -47,6 +47,17 @@ class HapticService {
   }
 
   /**
+   * Error feedback pattern (Distinct short haptic buzz)
+   */
+  public async error(): Promise<void> {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch {
+      Vibration.vibrate([0, 100, 50, 100]);
+    }
+  }
+
+  /**
    * Warning / Obstacle Pattern: Double medium buzz
    */
   public async warning(): Promise<void> {
