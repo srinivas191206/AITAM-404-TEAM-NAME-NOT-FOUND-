@@ -1,6 +1,5 @@
 ﻿import { intentService, IntentDetectionResult, RecognizedIntentType } from './intentService';
 import { visionService } from './visionService';
-import { sceneUnderstandingService } from './sceneUnderstandingService';
 import { ttsService } from './ttsService';
 
 export interface CommandRouteResult {
@@ -67,7 +66,7 @@ class CommandRouter {
       }
 
       case 'SCENE_DESCRIPTION': {
-        const result = await sceneUnderstandingService.describeScene();
+        const result = await visionService.queryScene();
         responseMessage = result.message;
         break;
       }

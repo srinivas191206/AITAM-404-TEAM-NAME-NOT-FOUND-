@@ -7,6 +7,11 @@ import {
 import { SpatialAnalysisResult } from './spatialAwarenessService';
 import { ocrService, OCRProcessingResult, OCRResult } from './ocrService';
 import { currencyService, CurrencyProcessingResult, CurrencyResult } from './currencyService';
+import {
+  sceneUnderstandingService,
+  SceneProcessingResult,
+  SceneResult,
+} from './sceneUnderstandingService';
 
 export interface VisionFrameMetadata {
   uri: string;
@@ -22,6 +27,7 @@ export interface VisionProcessingResult {
   spatialAnalysis?: SpatialAnalysisResult;
   ocrResult?: OCRResult;
   currencyResult?: CurrencyResult;
+  sceneResult?: SceneResult;
   frameMetadata?: VisionFrameMetadata;
   inferenceTimeMs?: number;
   error?: string;
@@ -40,31 +46,20 @@ class VisionService {
   private lastSpatialAnalysis: SpatialAnalysisResult | null = null;
   private lastOcrResult: OCRResult | null = null;
   private lastCurrencyResult: CurrencyResult | null = null;
+  private lastSceneResult: SceneResult | null = null;
 
-  /**
-   * Register the active CameraView capture delegate
-   */
   public registerCaptureDelegate(delegate: CaptureDelegate | null): void {
     this.captureDelegate = delegate;
   }
 
-  /**
-   * Register listener for camera preview visibility requests
-   */
   public registerVisibilityListener(listener: CameraVisibilityListener | null): void {
     this.cameraVisibilityListener = listener;
   }
 
-  /**
-   * Register listener for visual debugging bounding boxes
-   */
   public registerDetectionListener(listener: DetectionListener | null): void {
     this.detectionListener = listener;
   }
 
-  /**
-   * Open / activate the camera module
-   */
   public async openCamera(): Promise<boolean> {
     const hasPermission = await this.ensurePermission();
     if (!hasPermission) return false;
@@ -76,9 +71,6 @@ class VisionService {
     return true;
   }
 
-  /**
-   * Close / deactivate the camera module and release resources
-   */
   public closeCamera(): void {
     this.isCameraActive = false;
     if (this.cameraVisibilityListener) {
@@ -89,9 +81,6 @@ class VisionService {
     }
   }
 
-  /**
-   * Request / ensure camera permissions on demand
-   */
   public async ensurePermission(): Promise<boolean> {
     const status = await cameraService.getPermissionStatus();
     if (status === 'granted') {
@@ -100,9 +89,6 @@ class VisionService {
     return await cameraService.requestCameraPermission();
   }
 
-  /**
-   * Capture frame on-demand from the active camera
-   */
   public async captureFrame(): Promise<CameraFrameResult | null> {
     if (!this.captureDelegate) {
       console.warn('[VisionService] No capture delegate registered');
@@ -130,7 +116,6 @@ class VisionService {
       timestamp: frame.timestamp,
     };
 
-    // Run On-Device Object Detection + Spatial Awareness Pipeline
     const detectionPipeline: DetectionPipelineResult =
       await objectDetectionService.detectObjects(frame);
 
@@ -153,7 +138,7 @@ class VisionService {
   }
 
   /**
-   * Primary vision query handler invoked by Command Router for VISION_QUERY
+   * Primary vision query handler invoked by Command Router for VISION_QUERY (Phase 5)
    */
   public async queryVision(): Promise<VisionProcessingResult> {
     const permitted = await this.ensurePermission();
@@ -271,6 +256,52 @@ class VisionService {
     };
   }
 
+  /**
+   * Primary Scene query handler invoked by Command Router for SCENE_DESCRIPTION (Phase 6.3)
+   */
+  public async queryScene(): Promise<VisionProcessingResult> {
+    const permitted = await this.ensurePermission();
+    if (!permitted) {
+      return {
+        success: false,
+        message:
+          "I can't access the camera. You can enable camera access in your phone settings.",
+        error: 'permission_denied',
+      };
+    }
+
+    await this.openCamera();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const frame = await this.captureFrame();
+
+    const targetFrame: CameraFrameResult = frame || {
+      uri: 'file://simulated_scene_frame.jpg',
+      width: 1080,
+      height: 1920,
+      timestamp: Date.now(),
+    };
+
+    const sceneProcessing: SceneProcessingResult =
+      await sceneUnderstandingService.describeScene(targetFrame);
+    this.lastSceneResult = sceneProcessing.sceneResult || null;
+
+    const frameMetadata: VisionFrameMetadata = {
+      uri: targetFrame.uri,
+      width: targetFrame.width,
+      height: targetFrame.height,
+      timestamp: targetFrame.timestamp,
+    };
+
+    return {
+      success: sceneProcessing.success,
+      message: sceneProcessing.message,
+      sceneResult: sceneProcessing.sceneResult,
+      frameMetadata,
+      inferenceTimeMs: sceneProcessing.inferenceTimeMs,
+      error: sceneProcessing.error,
+    };
+  }
+
   public getLastDetections(): DetectionResult[] {
     return this.lastDetections;
   }
@@ -285,6 +316,10 @@ class VisionService {
 
   public getLastCurrencyResult(): CurrencyResult | null {
     return this.lastCurrencyResult;
+  }
+
+  public getLastSceneResult(): SceneResult | null {
+    return this.lastSceneResult;
   }
 
   public getIsActive(): boolean {

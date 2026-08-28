@@ -145,12 +145,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     });
 
     if (!started) {
-      // Permission or init failure handled inside onError
+      // Handled inside onError
     }
   };
 
   /**
-   * Process spoken command through Intent Understanding, Router, Vision, OCR & Currency
+   * Process spoken command through Intent Understanding, Router, Vision, OCR, Currency & Scene
    */
   const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
@@ -186,7 +186,11 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       } else {
         await hapticService.light();
       }
-    } else if (routeResult.intent === 'READ_TEXT' || routeResult.intent === 'CURRENCY_QUERY') {
+    } else if (
+      routeResult.intent === 'READ_TEXT' ||
+      routeResult.intent === 'CURRENCY_QUERY' ||
+      routeResult.intent === 'SCENE_DESCRIPTION'
+    ) {
       await hapticService.light();
     } else {
       await hapticService.success();
@@ -199,11 +203,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       onDone: async () => {
         if (isMountedRef.current) {
           await hapticService.light();
-          // Pause camera after vision, OCR, or currency perception completes
+          // Pause camera after vision, OCR, currency, or scene perception completes
           if (
             routeResult.intent === 'VISION_QUERY' ||
             routeResult.intent === 'READ_TEXT' ||
-            routeResult.intent === 'CURRENCY_QUERY'
+            routeResult.intent === 'CURRENCY_QUERY' ||
+            routeResult.intent === 'SCENE_DESCRIPTION'
           ) {
             visionService.closeCamera();
             setIsCameraActive(false);
@@ -216,7 +221,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           if (
             routeResult.intent === 'VISION_QUERY' ||
             routeResult.intent === 'READ_TEXT' ||
-            routeResult.intent === 'CURRENCY_QUERY'
+            routeResult.intent === 'CURRENCY_QUERY' ||
+            routeResult.intent === 'SCENE_DESCRIPTION'
           ) {
             visionService.closeCamera();
             setIsCameraActive(false);
@@ -403,7 +409,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </Text>
           <Text style={styles.micSubtitle}>
             {voiceState === 'LISTENING'
-              ? 'Speak naturally (e.g. "What\'s in front of me?" or "What currency is this?")'
+              ? 'Speak naturally (e.g. "What\'s in front of me?" or "Describe my surroundings")'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
@@ -427,7 +433,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </View>
         ) : null}
 
-        {/* TEST MATRIX TRAY (PHASE 4, 5, 6 TEST COMMANDS) */}
+        {/* TEST MATRIX TRAY (PHASE 4, 5, 6 COMPLETE CAPABILITIES) */}
         <View style={styles.testTray}>
           <Text style={styles.testTrayLabel}>TEST COMMAND INTENT MATRIX:</Text>
           <View style={styles.testChipsRow}>
@@ -473,22 +479,22 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Test What note is this"
+              accessibilityLabel="Test Describe my surroundings"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('What note is this?')}
-              style={[styles.testChip, styles.testChipCurrency]}
+              onPress={() => triggerSimulation('Describe my surroundings.')}
+              style={[styles.testChip, styles.testChipScene]}
             >
-              <Text style={styles.testChipCurrencyText}>💵 "What note is this?"</Text>
+              <Text style={styles.testChipSceneText}>🌐 "Describe my surroundings."</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Test Describe my surroundings"
+              accessibilityLabel="Test What's around me"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('Describe my surroundings.')}
-              style={styles.testChip}
+              onPress={() => triggerSimulation("What's around me?")}
+              style={[styles.testChip, styles.testChipScene]}
             >
-              <Text style={styles.testChipText}>"Describe my surroundings."</Text>
+              <Text style={styles.testChipSceneText}>🌐 "What's around me?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -789,6 +795,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: '#34D399',
+  },
+  testChipScene: {
+    borderColor: '#A855F7',
+    backgroundColor: '#3B0764',
+  },
+  testChipSceneText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#C084FC',
   },
   testChipUnknown: {
     borderColor: '#78350F',
