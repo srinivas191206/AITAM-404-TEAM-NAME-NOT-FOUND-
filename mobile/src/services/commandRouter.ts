@@ -97,25 +97,25 @@ class CommandRouter {
 
       case 'VISION_QUERY': {
         const result = await visionService.queryVision();
-        responseMessage = this.getResponseText('vision_query', result.message);
+        responseMessage = result.message || this.getResponseText('vision_query', 'Analyzing objects in front of you.');
         break;
       }
 
       case 'READ_TEXT': {
         const result = await visionService.queryOcr();
-        responseMessage = this.getResponseText('read_text', result.message);
+        responseMessage = result.message || this.getResponseText('read_text', "I couldn't find readable text.");
         break;
       }
 
       case 'CURRENCY_QUERY': {
         const result = await visionService.queryCurrency();
-        responseMessage = this.getResponseText('currency_query', result.message);
+        responseMessage = result.message || this.getResponseText('currency_query', "I couldn't identify the note.");
         break;
       }
 
       case 'SCENE_DESCRIPTION': {
         const result = await visionService.queryScene();
-        responseMessage = this.getResponseText('scene_description', result.message);
+        responseMessage = result.message || this.getResponseText('scene_description', "I couldn't analyze the scene.");
         break;
       }
 
