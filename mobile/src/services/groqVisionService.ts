@@ -1,29 +1,17 @@
-﻿/**
- * Groq Vision & AI Service with Automatic Multi-Key Rotation and Failover
- * ZERO SECRETS IN CODE - Keys are loaded from local gitignored vault
+/**
+ * Groq Vision & AI Service with Automatic Multi-Key Rotation and Gemini Fallback
  */
 
-let KEY_POOL: string[] = [];
-
-try {
-  // Dynamic import of local untracked key config
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const localVault = require('../config/groqKeys.local');
-  if (localVault && Array.isArray(localVault.LOCAL_GROQ_KEYS)) {
-    KEY_POOL = localVault.LOCAL_GROQ_KEYS;
-  }
-} catch {
-  // Key file is gitignored; gracefully falls back to on-device Google ML Kit models
-  KEY_POOL = [];
-}
+import { LOCAL_GROQ_KEYS } from '../config/groqKeys.local';
+import { geminiVisionService } from './geminiVisionService';
 
 class GroqVisionService {
-  private keys: string[] = [];
+  private keys: string[] = [...LOCAL_GROQ_KEYS];
   private currentKeyIndex: number = 0;
   private keyCooldowns: Map<string, number> = new Map();
 
   constructor() {
-    this.keys = [...KEY_POOL];
+    this.keys = [...LOCAL_GROQ_KEYS];
   }
 
   public setKeys(newKeys: string[]) {
@@ -61,68 +49,77 @@ class GroqVisionService {
   public async analyzeWithVision(
     base64Image: string,
     prompt: string,
-    maxRetries: number = 3
+    maxRetries: number = 5
   ): Promise<string | null> {
-    if (!base64Image || this.keys.length === 0) return null;
+    if (!base64Image) return null;
 
     const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const activeKey = this.getActiveKey();
-      if (!activeKey) break;
+    // TIER 1: GROQ MULTI-KEY POOL ROTATION
+    if (this.keys.length > 0) {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const activeKey = this.getActiveKey();
+        if (!activeKey) break;
 
-      try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${activeKey}`,
-          },
-          body: JSON.stringify({
-            model: 'llama-3.2-11b-vision-preview',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'text',
-                    text: `${prompt} Answer in 1 or 2 concise, natural sentences suitable for a blind user listening to audio. Never mention you are an AI or describe photo quality. Speak directly as if you are their eyes.`,
-                  },
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: `data:image/jpeg;base64,${cleanBase64}`,
+        try {
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${activeKey}`,
+            },
+            body: JSON.stringify({
+              model: 'llama-3.2-11b-vision-preview',
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: `${prompt} Answer in 1 or 2 concise, natural sentences suitable for a blind user listening to audio. Never mention you are an AI or describe photo quality. Speak directly as if you are their eyes.`,
                     },
-                  },
-                ],
-              },
-            ],
-            max_tokens: 150,
-            temperature: 0.2,
-          }),
-        });
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:image/jpeg;base64,${cleanBase64}`,
+                      },
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 150,
+              temperature: 0.2,
+            }),
+          });
 
-        if (response.status === 429 || response.status === 401 || response.status === 403) {
+          if (response.status === 429 || response.status === 401 || response.status === 403) {
+            this.markKeyRateLimited(activeKey);
+            continue;
+          }
+
+          if (!response.ok) {
+            const errText = await response.text();
+            console.warn(`[GroqVisionService] API Error (${response.status}):`, errText);
+            this.markKeyRateLimited(activeKey);
+            continue;
+          }
+
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content?.trim();
+          if (content) {
+            return content;
+          }
+        } catch (err) {
+          console.warn(`[GroqVisionService] Request error:`, err);
           this.markKeyRateLimited(activeKey);
-          continue;
         }
-
-        if (!response.ok) {
-          const errText = await response.text();
-          console.warn(`[GroqVisionService] API Error (${response.status}):`, errText);
-          this.markKeyRateLimited(activeKey);
-          continue;
-        }
-
-        const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content?.trim();
-        if (content) {
-          return content;
-        }
-      } catch (err) {
-        console.warn(`[GroqVisionService] Request error:`, err);
-        this.markKeyRateLimited(activeKey);
       }
+    }
+
+    // TIER 2: GEMINI 1.5 FLASH FALLBACK
+    const geminiResult = await geminiVisionService.analyzeVision(base64Image, prompt);
+    if (geminiResult) {
+      return geminiResult;
     }
 
     return null;
