@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
+import { DetectionResult } from '../../services/objectDetectionService';
 
 interface VisionCameraPreviewProps {
   cameraRef: React.RefObject<CameraView>;
   isActive: boolean;
+  detections?: DetectionResult[];
   onCameraReady?: () => void;
   onMountError?: (error: any) => void;
   style?: StyleProp<ViewStyle>;
@@ -15,6 +17,7 @@ interface VisionCameraPreviewProps {
 export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
   cameraRef,
   isActive,
+  detections = [],
   onCameraReady,
   onMountError,
   style,
@@ -42,7 +45,7 @@ export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
   return (
     <View
       accessible={true}
-      accessibilityLabel="Camera perception viewport is active and capturing frames."
+      accessibilityLabel={`Camera perception viewport is active. ${detections.length} objects detected.`}
       style={[styles.activeContainer, style]}
     >
       <CameraView
@@ -60,7 +63,7 @@ export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
         }}
       >
         {/* CALM ACCESSIBLE VIEWPORT CORNERS */}
-        <View style={styles.overlay}>
+        <View style={styles.overlay} pointerEvents="none">
           <View style={styles.cornerTopLeft} />
           <View style={styles.cornerTopRight} />
           <View style={styles.cornerBottomLeft} />
@@ -68,8 +71,32 @@ export const VisionCameraPreview: React.FC<VisionCameraPreviewProps> = ({
 
           <View style={styles.activePill}>
             <View style={styles.activeDot} />
-            <Text style={styles.activePillText}>PERCEPTION ACTIVE</Text>
+            <Text style={styles.activePillText}>
+              PERCEPTION ACTIVE {detections.length > 0 ? `(${detections.length} DETECTED)` : ''}
+            </Text>
           </View>
+
+          {/* VISUAL DEBUG BOUNDING BOXES (DEVELOPMENT / ACCESSIBILITY HUD) */}
+          {detections.map((det) => (
+            <View
+              key={det.id}
+              style={[
+                styles.detectionBox,
+                {
+                  left: det.position === 'LEFT' ? '10%' : det.position === 'RIGHT' ? '55%' : '30%',
+                  top: det.position === 'LEFT' ? '25%' : '35%',
+                  width: '35%',
+                  height: '45%',
+                },
+              ]}
+            >
+              <View style={styles.detectionBadge}>
+                <Text style={styles.detectionBadgeText}>
+                  {det.label.toUpperCase()} {Math.round(det.confidence * 100)}% [{det.position}]
+                </Text>
+              </View>
+            </View>
+          ))}
         </View>
       </CameraView>
     </View>
@@ -173,12 +200,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 4,
     borderRadius: Spacing.radiusSm,
     borderWidth: 1,
     borderColor: Colors.blindBorder,
+    zIndex: 10,
   },
   activeDot: {
     width: 8,
@@ -192,5 +220,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  detectionBox: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    borderRadius: Spacing.radiusSm,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+  },
+  detectionBadge: {
+    position: 'absolute',
+    top: -18,
+    left: 0,
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  detectionBadgeText: {
+    color: '#000000',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
 });

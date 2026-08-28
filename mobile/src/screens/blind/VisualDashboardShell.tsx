@@ -20,6 +20,7 @@ import { commandRouter, CommandRouteResult } from '../../services/commandRouter'
 import { RecognizedIntentType } from '../../services/intentService';
 import { visionService } from '../../services/visionService';
 import { cameraService } from '../../services/cameraService';
+import { objectDetectionService, DetectionResult } from '../../services/objectDetectionService';
 import { VisionCameraPreview } from '../../components/camera/VisionCameraPreview';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
@@ -39,6 +40,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [activeDetections, setActiveDetections] = useState<DetectionResult[]>([]);
 
   const isMountedRef = useRef(true);
   const cameraRef = useRef<CameraView>(null);
@@ -57,6 +59,12 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       }
     });
 
+    visionService.registerDetectionListener((detections: DetectionResult[]) => {
+      if (isMountedRef.current) {
+        setActiveDetections(detections);
+      }
+    });
+
     // App state listener to stop audio & camera on background/minimize
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
@@ -65,6 +73,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       subscription.remove();
       visionService.registerCaptureDelegate(null);
       visionService.registerVisibilityListener(null);
+      visionService.registerDetectionListener(null);
       cleanupAllResources();
     };
   }, []);
@@ -81,6 +90,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     visionService.closeCamera();
     if (isMountedRef.current) {
       setIsCameraActive(false);
+      setActiveDetections([]);
       setVoiceState('READY');
     }
   };
@@ -146,7 +156,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
-    setResponseMessage('Understanding command...');
+    setResponseMessage('Analyzing...');
 
     // Route through central Command Router
     const routeResult: CommandRouteResult = await commandRouter.routeCommand(rawTranscript);
@@ -161,6 +171,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       await hapticService.success();
       visionService.closeCamera();
       setIsCameraActive(false);
+      setActiveDetections([]);
       setVoiceState('READY');
       return;
     }
@@ -327,10 +338,11 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           <Text style={styles.statusMessage}>{responseMessage}</Text>
         </View>
 
-        {/* CAMERA PERCEPTION PREVIEW VIEWPORT */}
+        {/* CAMERA PERCEPTION PREVIEW VIEWPORT (WITH DETECTIONS OVERLAY) */}
         <VisionCameraPreview
           cameraRef={cameraRef}
           isActive={isCameraActive}
+          detections={activeDetections}
           onCameraReady={() => cameraService.setCameraReady(true)}
           onMountError={(err) => {
             console.warn('[VisualDashboardShell] Camera error:', err);
@@ -365,7 +377,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             {voiceState === 'LISTENING'
               ? 'LISTENING...'
               : voiceState === 'PROCESSING'
-              ? 'UNDERSTANDING...'
+              ? 'ANALYZING...'
               : voiceState === 'RESPONDING'
               ? 'RESPONDING'
               : voiceState === 'ERROR'
