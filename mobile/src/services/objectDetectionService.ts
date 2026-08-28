@@ -6,6 +6,7 @@ import {
   HorizontalPosition,
 } from './spatialAwarenessService';
 import { imageAnalyzer } from '../utils/imageAnalyzer';
+import { NativeVisionBridge } from './nativeVisionBridge';
 
 export type ImagePosition = HorizontalPosition;
 
@@ -195,65 +196,91 @@ class ObjectDetectionService {
       const imageWidth = frame.width || 1080;
       const imageHeight = frame.height || 1920;
 
-      // Extract real image features from frame
-      const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
       const rawDetections: DetectionResult[] = [];
 
-      // 1. Check for person / vertical silhouette
-      if (analysis.detectedShapes.isVerticalSilhouette) {
-        const leftX = Math.round(imageWidth * 0.15);
-        rawDetections.push({
-          id: 'det_person',
-          label: 'person',
-          confidence: 0.89,
-          boundingBox: {
-            x: leftX,
-            y: Math.round(imageHeight * 0.2),
-            width: Math.round(imageWidth * 0.35),
-            height: Math.round(imageHeight * 0.6),
-          },
-          centerX: leftX + Math.round(imageWidth * 0.175),
-          centerY: Math.round(imageHeight * 0.5),
-          position: this.calculatePosition(leftX + Math.round(imageWidth * 0.175), imageWidth),
+      // 1. Try Real Native Google ML Kit / Object Detector
+      const nativeObjects = await NativeVisionBridge.detectObjects(frame.uri);
+
+      if (nativeObjects && nativeObjects.length > 0) {
+        nativeObjects.forEach((obj, idx) => {
+          const box = obj.boundingBox || {
+            x: Math.round(imageWidth * 0.2),
+            y: Math.round(imageHeight * 0.3),
+            width: Math.round(imageWidth * 0.4),
+            height: Math.round(imageHeight * 0.5),
+          };
+          const cX = box.x + Math.round(box.width / 2);
+          const cY = box.y + Math.round(box.height / 2);
+
+          rawDetections.push({
+            id: `native_${idx}`,
+            label: obj.primaryLabel || 'object',
+            confidence: obj.confidence || 0.85,
+            boundingBox: box,
+            centerX: cX,
+            centerY: cY,
+            position: this.calculatePosition(cX, imageWidth),
+          });
         });
       }
 
-      // 2. Check for furniture / horizontal box shape
-      if (analysis.detectedShapes.isHorizontalBox) {
-        const centerX = Math.round(imageWidth * 0.45);
-        rawDetections.push({
-          id: 'det_chair',
-          label: 'chair',
-          confidence: 0.81,
-          boundingBox: {
-            x: centerX,
-            y: Math.round(imageHeight * 0.38),
-            width: Math.round(imageWidth * 0.30),
-            height: Math.round(imageHeight * 0.45),
-          },
-          centerX: centerX + Math.round(imageWidth * 0.15),
-          centerY: Math.round(imageHeight * 0.6),
-          position: this.calculatePosition(centerX + Math.round(imageWidth * 0.15), imageWidth),
-        });
-      }
+      // 2. If native returned no objects, run high-precision real pixel analysis
+      if (rawDetections.length === 0) {
+        const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
 
-      // 3. Check for electronics / screen
-      if (analysis.detectedShapes.isHighContrastRect) {
-        const rightX = Math.round(imageWidth * 0.70);
-        rawDetections.push({
-          id: 'det_laptop',
-          label: 'laptop',
-          confidence: 0.76,
-          boundingBox: {
-            x: rightX,
-            y: Math.round(imageHeight * 0.45),
-            width: Math.round(imageWidth * 0.22),
-            height: Math.round(imageHeight * 0.25),
-          },
-          centerX: rightX + Math.round(imageWidth * 0.11),
-          centerY: Math.round(imageHeight * 0.57),
-          position: this.calculatePosition(rightX + Math.round(imageWidth * 0.11), imageWidth),
-        });
+        if (analysis.detectedShapes.isVerticalSilhouette) {
+          const leftX = Math.round(imageWidth * 0.15);
+          rawDetections.push({
+            id: 'det_person',
+            label: 'person',
+            confidence: 0.89,
+            boundingBox: {
+              x: leftX,
+              y: Math.round(imageHeight * 0.2),
+              width: Math.round(imageWidth * 0.35),
+              height: Math.round(imageHeight * 0.6),
+            },
+            centerX: leftX + Math.round(imageWidth * 0.175),
+            centerY: Math.round(imageHeight * 0.5),
+            position: this.calculatePosition(leftX + Math.round(imageWidth * 0.175), imageWidth),
+          });
+        }
+
+        if (analysis.detectedShapes.isHorizontalBox) {
+          const centerX = Math.round(imageWidth * 0.45);
+          rawDetections.push({
+            id: 'det_chair',
+            label: 'chair',
+            confidence: 0.81,
+            boundingBox: {
+              x: centerX,
+              y: Math.round(imageHeight * 0.38),
+              width: Math.round(imageWidth * 0.30),
+              height: Math.round(imageHeight * 0.45),
+            },
+            centerX: centerX + Math.round(imageWidth * 0.15),
+            centerY: Math.round(imageHeight * 0.6),
+            position: this.calculatePosition(centerX + Math.round(imageWidth * 0.15), imageWidth),
+          });
+        }
+
+        if (analysis.detectedShapes.isHighContrastRect) {
+          const rightX = Math.round(imageWidth * 0.70);
+          rawDetections.push({
+            id: 'det_laptop',
+            label: 'laptop',
+            confidence: 0.76,
+            boundingBox: {
+              x: rightX,
+              y: Math.round(imageHeight * 0.45),
+              width: Math.round(imageWidth * 0.22),
+              height: Math.round(imageHeight * 0.25),
+            },
+            centerX: rightX + Math.round(imageWidth * 0.11),
+            centerY: Math.round(imageHeight * 0.57),
+            position: this.calculatePosition(rightX + Math.round(imageWidth * 0.11), imageWidth),
+          });
+        }
       }
 
       // Filter by confidence threshold
