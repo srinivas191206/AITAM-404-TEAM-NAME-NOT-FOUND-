@@ -1,4 +1,5 @@
 export type RecognizedIntentType =
+  | 'GREETING'
   | 'VISION_QUERY'
   | 'READ_TEXT'
   | 'SCENE_DESCRIPTION'
@@ -60,7 +61,7 @@ class IntentService {
     const normalized = this.normalizeInput(rawInput);
     const originalTrimmed = rawInput.trim();
 
-    // 1. STOP / CANCEL / NEVER MIND (Highest Priority - Immediate Interaction Control)
+    // 1. STOP / CANCEL (Highest Priority)
     if (this.isStopIntent(normalized)) {
       return {
         intent: 'STOP',
@@ -70,7 +71,17 @@ class IntentService {
       };
     }
 
-    // 2. REPEAT / SAY THAT AGAIN
+    // 2. GREETINGS (HEY HI / HELLO / NAMASTE)
+    if (this.isGreetingIntent(normalized)) {
+      return {
+        intent: 'GREETING',
+        confidence: 0.99,
+        rawInput: originalTrimmed,
+        normalizedInput: normalized,
+      };
+    }
+
+    // 3. REPEAT / SAY THAT AGAIN
     if (this.isRepeatIntent(normalized)) {
       return {
         intent: 'REPEAT',
@@ -80,7 +91,7 @@ class IntentService {
       };
     }
 
-    // 3. HELP
+    // 4. HELP
     if (this.isHelpIntent(normalized)) {
       return {
         intent: 'HELP',
@@ -90,13 +101,13 @@ class IntentService {
       };
     }
 
-    // 4. NAVIGATION WITH DESTINATION EXTRACTION
+    // 5. NAVIGATION WITH DESTINATION EXTRACTION
     const navResult = this.checkNavigationIntent(rawInput, normalized);
     if (navResult) {
       return navResult;
     }
 
-    // 5. CURRENCY QUERY
+    // 6. CURRENCY QUERY
     if (this.isCurrencyIntent(normalized)) {
       return {
         intent: 'CURRENCY_QUERY',
@@ -106,7 +117,7 @@ class IntentService {
       };
     }
 
-    // 6. READ TEXT / OCR QUERY
+    // 7. READ TEXT / OCR QUERY
     if (this.isReadTextIntent(normalized)) {
       return {
         intent: 'READ_TEXT',
@@ -116,7 +127,7 @@ class IntentService {
       };
     }
 
-    // 7. SCENE DESCRIPTION / SURROUNDINGS
+    // 8. SCENE DESCRIPTION / SURROUNDINGS
     if (this.isSceneDescriptionIntent(normalized)) {
       return {
         intent: 'SCENE_DESCRIPTION',
@@ -126,7 +137,7 @@ class IntentService {
       };
     }
 
-    // 8. VISION QUERY (WHAT'S IN FRONT / AHEAD)
+    // 9. VISION QUERY (WHAT'S IN FRONT / AHEAD)
     if (this.isVisionQueryIntent(normalized)) {
       return {
         intent: 'VISION_QUERY',
@@ -136,7 +147,7 @@ class IntentService {
       };
     }
 
-    // 9. AMBIGUOUS QUERIES (Need clarification before taking action)
+    // 10. AMBIGUOUS QUERIES
     if (this.isAmbiguousIntent(normalized)) {
       return {
         intent: 'AMBIGUOUS',
@@ -149,7 +160,7 @@ class IntentService {
       };
     }
 
-    // 10. UNKNOWN / UNSUPPORTED
+    // 11. UNKNOWN
     return {
       intent: 'UNKNOWN',
       confidence: 0.1,
@@ -159,6 +170,25 @@ class IntentService {
   }
 
   // --- INTENT PATTERN DETECTORS ---
+
+  private isGreetingIntent(text: string): boolean {
+    const patterns = [
+      '^hi$',
+      '^hey$',
+      '^hello$',
+      '^hey hi$',
+      '^hey hello$',
+      '^hey siri$',
+      '^namaste$',
+      '^namaskaram$',
+      'నమస్కారం',
+      'नमस्ते',
+    ];
+    return (
+      patterns.some((p) => new RegExp(p, 'i').test(text)) ||
+      /^(hi|hey|hello|namaste|namaskaram)\b/i.test(text)
+    );
+  }
 
   private isStopIntent(text: string): boolean {
     if (text === 'stop' || text === 'cancel' || text === 'nevermind') return true;
@@ -198,169 +228,143 @@ class IntentService {
     const patterns = [
       '^help$',
       '^help me$',
-      '^i need help$',
       '^what can you do$',
-      '^what are the commands$',
-      '^list commands$',
-      '^how does this work$',
-      '^how do i use this$',
+      '^how to use$',
+      '^instructions$',
       '^options$',
+      '^commands$',
     ];
     return patterns.some((p) => new RegExp(p, 'i').test(text)) || /^help\b/i.test(text);
   }
 
-  private isVisionQueryIntent(text: string): boolean {
-    const phrases = [
-      'whats in front of me',
-      "what's in front of me",
-      'what is in front of me',
-      'whats ahead of me',
-      "what's ahead of me",
-      'what is ahead of me',
-      'what is ahead',
-      'whats ahead',
-      "what's ahead",
-      'what do i have in front',
-      'what do i have in front of me',
-      'can you tell me what is in front',
-      'can you tell me whats in front',
-      "can you tell me what's in front",
-      'look ahead',
-      'check in front',
-      'whats right in front of me',
-      "what's right in front of me",
-      'describe what is in front',
-      'detect obstacles in front',
-      'what do you see in front',
-    ];
-    return phrases.some((p) => text.includes(p)) || /in front of me|what is ahead|whats ahead/.test(text);
-  }
-
-  private isReadTextIntent(text: string): boolean {
-    const phrases = [
-      'read this',
-      'read the text',
-      'what does this say',
-      'can you read this',
-      'read what is written here',
-      'read whats written here',
-      "read what's written here",
-      'tell me what this says',
-      'read sign',
-      'read document',
-      'read letter',
-      'read page',
-      'read note',
-      'read words',
-      'read the sign',
-      'read the label',
-      'ocr',
-    ];
-    return phrases.some((p) => text.includes(p)) || (/^read\b/.test(text) && !text.includes('around'));
-  }
-
-  private isSceneDescriptionIntent(text: string): boolean {
-    const phrases = [
-      'describe my surroundings',
-      'describe surroundings',
-      'whats around me',
-      "what's around me",
-      'what is around me',
-      'tell me about my surroundings',
-      'describe whats around me',
-      "describe what's around me",
-      'describe what is around me',
-      'look around',
-      'describe the room',
-      'describe the environment',
-      'where am i',
-      'what is around',
-      'whats around',
-      "what's around",
-    ];
-    return phrases.some((p) => text.includes(p)) || /around me|surroundings|look around/.test(text);
-  }
-
-  private isCurrencyIntent(text: string): boolean {
-    const phrases = [
-      'what currency is this',
-      'identify this money',
-      'what note is this',
-      'how much money is this',
-      'identify currency',
-      'check currency',
-      'what rupee is this',
-      'count money',
-      'how many rupees',
-      'is this money',
-      'recognize currency',
-      'can you identify this note',
-      'which rupee note is this',
-      'what denomination is this',
-    ];
-    return phrases.some((p) => text.includes(p)) || /currency|money note|rupee note|how much cash/.test(text);
-  }
-
-  private checkNavigationIntent(raw: string, normalized: string): IntentDetectionResult | null {
-    const navPatterns = [
-      /take me to(?: the)?\s+(.+)/i,
-      /navigate to(?: the)?\s+(.+)/i,
-      /how do i get to(?: the)?\s+(.+)/i,
-      /directions to(?: the)?\s+(.+)/i,
-      /route to(?: the)?\s+(.+)/i,
-      /guide me to(?: the)?\s+(.+)/i,
-      /walk to(?: the)?\s+(.+)/i,
-      /go to(?: the)?\s+(.+)/i,
+  private checkNavigationIntent(rawInput: string, normalized: string): IntentDetectionResult | null {
+    const navKeywords = [
+      'navigate to',
+      'take me to',
+      'directions to',
+      'how to get to',
+      'route to',
+      'find way to',
+      'go to',
+      'where is',
     ];
 
-    for (const pattern of navPatterns) {
-      const match = raw.match(pattern);
-      if (match && match[1]) {
-        let dest = match[1].trim();
-        // Remove trailing punctuation or conversational filler
-        dest = dest.replace(/[.?!\s]+$/, '');
-        if (dest.length > 0) {
+    for (const kw of navKeywords) {
+      if (normalized.includes(kw)) {
+        const parts = normalized.split(kw);
+        const destination = parts.length > 1 ? parts[1].trim() : '';
+
+        if (destination.length > 0) {
           return {
             intent: 'NAVIGATION',
             confidence: 0.95,
-            rawInput: raw.trim(),
+            rawInput,
             normalizedInput: normalized,
             parameters: {
-              destination: dest,
+              destination,
             },
           };
         }
       }
     }
 
-    // Direct keyword check with safe fallback
-    if (normalized.startsWith('navigate') || normalized.startsWith('navigation')) {
-      const parts = normalized.split(/\s+/);
-      const dest = parts.slice(1).join(' ').trim();
+    if (
+      normalized.startsWith('navigate') ||
+      normalized.startsWith('direction') ||
+      normalized.startsWith('directions')
+    ) {
       return {
         intent: 'NAVIGATION',
         confidence: 0.85,
-        rawInput: raw.trim(),
+        rawInput,
         normalizedInput: normalized,
-        parameters: {
-          destination: dest || 'destination',
-        },
       };
     }
 
     return null;
   }
 
-  private isAmbiguousIntent(text: string): boolean {
-    const ambiguousPatterns = [
-      '^tell me about this$',
-      '^what is this$',
-      '^check this$',
-      '^look at this$',
-      '^what am i looking at$',
-      '^explain this$',
+  private isCurrencyIntent(text: string): boolean {
+    const patterns = [
+      'currency',
+      'money',
+      'rupee',
+      'rupees',
+      'note',
+      'cash',
+      'how much money',
+      'what note',
+      'check currency',
+      'read currency',
+      'identify currency',
+      'count money',
+      'కరెన్సీ',
+      'రూపాయలు',
+      'नोट',
+      'रुपये',
     ];
-    return ambiguousPatterns.some((p) => new RegExp(p, 'i').test(text));
+    return patterns.some((p) => text.includes(p));
+  }
+
+  private isReadTextIntent(text: string): boolean {
+    const patterns = [
+      'read text',
+      'read this',
+      'read document',
+      'read sign',
+      'read signboard',
+      'what does it say',
+      'read text in front',
+      'ocr',
+      'scan text',
+      'చదువు',
+      'పాఠం',
+      'पढ़ो',
+      'पाठ',
+    ];
+    return patterns.some((p) => text.includes(p));
+  }
+
+  private isSceneDescriptionIntent(text: string): boolean {
+    const patterns = [
+      'describe scene',
+      'describe surroundings',
+      'describe environment',
+      'where am i',
+      'what is around me',
+      'whats around me',
+      'room description',
+      'tell me about this place',
+      'వాతావరణం',
+      'చుట్టుపక్కల',
+      'कमरा',
+      'आसपास',
+    ];
+    return patterns.some((p) => text.includes(p));
+  }
+
+  private isVisionQueryIntent(text: string): boolean {
+    const patterns = [
+      'what is in front',
+      'whats in front',
+      'what is ahead',
+      'whats ahead',
+      'what do you see',
+      'describe what you see',
+      'look ahead',
+      'any obstacle',
+      'obstacles',
+      'front of me',
+      'ఏముంది',
+      'నా ముందు',
+      'सामने क्या है',
+    ];
+    return patterns.some((p) => text.includes(p));
+  }
+
+  private isAmbiguousIntent(text: string): boolean {
+    const ambiguousPatterns = ['what is this', 'look at this', 'tell me about this', 'check this'];
+    return ambiguousPatterns.some((p) => text === p || text.startsWith(p));
   }
 }
 

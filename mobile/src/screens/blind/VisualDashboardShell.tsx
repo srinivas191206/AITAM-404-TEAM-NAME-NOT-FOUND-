@@ -120,7 +120,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   const [transcript, setTranscript] = useState<string>('');
   const [detectedIntent, setDetectedIntent] = useState<RecognizedIntentType | null>(null);
   const [responseMessage, setResponseMessage] = useState<string>(
-    'Voice assistant ready. Tap the microphone area to speak.'
+    ttsService.translateKey('ready')
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
@@ -181,6 +181,16 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       }
     });
 
+    // HANDS-FREE FOR BLIND USER: Speak audio greeting immediately on open, then start continuous listening loop!
+    const welcomeAnnouncement = ttsService.translateKey('ready');
+    ttsService.speak(welcomeAnnouncement, {
+      onDone: () => {
+        if (isMountedRef.current) {
+          startListeningHandsFree();
+        }
+      },
+    });
+
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => {
       isMountedRef.current = false;
@@ -209,24 +219,16 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
-  const handleMicrophonePress = async () => {
-    if (ttsService.getSpeakingState()) {
-      await ttsService.stop();
-    }
+  /**
+   * Continuous Hands-Free Auto-Listening Loop for Blind Users
+   */
+  const startListeningHandsFree = async () => {
+    if (!isMountedRef.current) return;
+    if (ttsService.getSpeakingState()) return;
 
-    if (voiceState === 'LISTENING') {
-      await hapticService.light();
-      await speechRecognitionService.stopListening();
-      setVoiceState('READY');
-      setResponseMessage('Voice assistant ready. Tap microphone to speak.');
-      return;
-    }
-
-    await hapticService.light();
     setErrorMessage(null);
     setVoiceState('LISTENING');
-    setTranscript('');
-    setResponseMessage('Listening...');
+    setResponseMessage(ttsService.translateKey('listening'));
 
     const started = await speechRecognitionService.startListening({
       onStart: () => {
@@ -251,16 +253,31 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       },
     });
 
-    if (!started) {
-      // Handled inside onError
+    if (!started && isMountedRef.current) {
+      setVoiceState('READY');
     }
+  };
+
+  const handleMicrophonePress = async () => {
+    await hapticService.light();
+    if (ttsService.getSpeakingState()) {
+      await ttsService.stop();
+    }
+
+    if (voiceState === 'LISTENING') {
+      await speechRecognitionService.stopListening();
+      setVoiceState('READY');
+      return;
+    }
+
+    await startListeningHandsFree();
   };
 
   const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
-    setResponseMessage('Analyzing...');
+    setResponseMessage(ttsService.translateKey('analyzing'));
 
     const routeResult: CommandRouteResult = await commandRouter.routeCommand(rawTranscript);
 
@@ -275,6 +292,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       setIsCameraActive(false);
       setActiveDetections([]);
       setVoiceState('READY');
+      // Resume hands-free listening loop
+      setTimeout(startListeningHandsFree, 800);
       return;
     }
 
@@ -299,6 +318,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
     setVoiceState('RESPONDING');
 
+    // Speak response aloud via TTS
     await ttsService.speak(routeResult.responseMessage, {
       onDone: async () => {
         if (isMountedRef.current) {
@@ -313,6 +333,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             setIsCameraActive(false);
           }
           setVoiceState('READY');
+          // HANDS-FREE AUTOMATIC RESUME: Listen again after answering!
+          setTimeout(startListeningHandsFree, 600);
         }
       },
       onError: () => {
@@ -327,41 +349,26 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             setIsCameraActive(false);
           }
           setVoiceState('READY');
+          setTimeout(startListeningHandsFree, 1000);
         }
       },
     });
   };
 
   const handleSilenceTimeout = async () => {
-    await hapticService.error();
-    setVoiceState('ERROR');
-    const msg = "I didn't hear anything. Please try again.";
-    setErrorMessage(msg);
-    setResponseMessage(msg);
-
-    await ttsService.speak(msg, {
-      onDone: () => {
-        if (isMountedRef.current) {
-          setVoiceState('READY');
-        }
-      },
-    });
+    await hapticService.light();
+    if (isMountedRef.current) {
+      setVoiceState('READY');
+      // Quietly restart listening loop so blind user is never locked out!
+      setTimeout(startListeningHandsFree, 1500);
+    }
   };
 
   const handleVoiceError = async (errType: string) => {
     await hapticService.error();
     setVoiceState('ERROR');
 
-    let spokenError = '';
-    if (errType === 'permission_denied' || errType === 'permission_permanently_denied') {
-      spokenError =
-        "I can't access the microphone. You can enable microphone access in your phone settings.";
-    } else if (errType === 'silence_timeout' || errType === 'no_speech_detected') {
-      spokenError = "I didn't hear anything. Please try again.";
-    } else {
-      spokenError = "I couldn't understand that. Please try again.";
-    }
-
+    const spokenError = ttsService.translateKey('error_unknown');
     setErrorMessage(spokenError);
     setResponseMessage(spokenError);
 
@@ -369,6 +376,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       onDone: () => {
         if (isMountedRef.current) {
           setVoiceState('READY');
+          setTimeout(startListeningHandsFree, 1200);
         }
       },
     });
@@ -411,7 +419,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                   </View>
                   <Text style={[styles.headerTitle, { color: palette.primaryText }]}>Visual Assistant</Text>
                 </View>
-                <Text style={[styles.headerGreeting, { color: palette.secondaryText }]}>Hi. How can I help you?</Text>
+                <Text style={[styles.headerGreeting, { color: palette.secondaryText }]}>Hands-Free Voice Active</Text>
               </View>
               <TouchableOpacity
                 accessible={true}
@@ -440,18 +448,18 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
               <View style={styles.stateIndicatorRow}>
                 <View style={[styles.stateDot, { backgroundColor: palette.accentTeal }]} />
-                <Text style={[styles.stateLabel, { color: palette.accentTeal }]}>STATE: {voiceState}</Text>
+                <Text style={[styles.stateLabel, { color: palette.accentTeal }]}>HANDS-FREE STATE: {voiceState}</Text>
               </View>
               <Text style={[styles.statusMessage, { color: palette.primaryText }]}>{responseMessage}</Text>
             </View>
 
-            {/* LARGE INTERACTIVE VOICE MIC CARD */}
+            {/* FULL-SCREEN HANDS-FREE VOICE MIC CARD */}
             <TouchableOpacity
               accessible={true}
               accessibilityLabel={
                 voiceState === 'LISTENING'
-                  ? 'Microphone is active. Tap to cancel listening.'
-                  : 'Voice assistant. Activate microphone.'
+                  ? 'Hands-free mic active. Speak your command now.'
+                  : 'Voice assistant active. Tap to toggle.'
               }
               accessibilityRole="button"
               activeOpacity={0.85}
@@ -467,19 +475,15 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               <BigMicWavesIcon color={palette.accentTeal} />
               <Text style={[styles.micTitle, { color: palette.accentTeal }]}>
                 {voiceState === 'LISTENING'
-                  ? 'LISTENING...'
+                  ? 'LISTENING... (SAY ANYTHING)'
                   : voiceState === 'PROCESSING'
-                  ? 'PROCESSING...'
+                  ? 'ANALYZING VOICE...'
                   : voiceState === 'RESPONDING'
                   ? 'SPEAKING RESPONSE'
-                  : voiceState === 'ERROR'
-                  ? 'TAP TO RETRY'
-                  : 'TAP TO SPEAK'}
+                  : 'HANDS-FREE READY'}
               </Text>
               <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
-                {voiceState === 'LISTENING'
-                  ? 'Say "What\'s in front of me?" or "Describe surroundings"'
-                  : 'Tap to start voice interaction'}
+                Say "Hey Hi", "What's in front of me?", or "Check currency"
               </Text>
             </TouchableOpacity>
 
@@ -497,6 +501,17 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                 TEST VOICE INTERACTION (SIMULATION):
               </Text>
               <View style={styles.testChipsRow}>
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Hey Hi"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Hey Hi')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Hey Hi"</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   accessible={true}
                   accessibilityLabel="Simulate saying What is in front of me"
@@ -528,28 +543,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                 >
                   <SpeakerIcon color={palette.accentTeal} size={15} />
                   <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate saying Describe surroundings"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('Describe my surroundings.')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <SpeakerIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Describe surroundings"</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate silence timeout"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('__SILENCE__')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <ClockIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>Silence Timeout</Text>
                 </TouchableOpacity>
               </View>
             </View>

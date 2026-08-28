@@ -13,6 +13,7 @@ export interface CommandRouteResult {
 // Multilingual Command Response Translations
 const RESPONSES: Record<string, Record<string, string>> = {
   te: {
+    greeting: "నమస్కారం! నేను మీ విజువల్ అసిస్టెంట్. 'నా ముందు ఏమి ఉంది?', 'చదువు', లేదా 'కరెన్సీ తనిఖీ చేయి' అని అడగండి.",
     stop: 'ఆపబడింది.',
     repeat_empty: 'నాకు మళ్లీ చెప్పడానికి ఏమీ లేదు.',
     help: 'మీరు నన్ను మీ ముందు ఉన్న వస్తువులను వర్ణించమని, వచనాన్ని చదవమని, కరెన్సీ నోట్లను గుర్తించమని లేదా దారి చూపించమని అడగవచ్చు.',
@@ -24,6 +25,7 @@ const RESPONSES: Record<string, Record<string, string>> = {
     unknown: 'నాకు అర్థం కాలేదు. దయచేసి మీ ప్రశ్నను మళ్లీ చెప్పండి.',
   },
   hi: {
+    greeting: "नमस्ते! मैं आपका विजुअल असिस्टेंट हूँ। 'मेरे सामने क्या है?', 'पाठ पढ़ो', या 'नोट पहचानो' बोल सकते हैं।",
     stop: 'रोक दिया गया।',
     repeat_empty: 'मेरे पास दोहराने के लिए अभी कुछ नहीं है।',
     help: 'आप मुझसे अपने सामने की चीज़ों को देखने, पाठ पढ़ने, मुद्रा पहचानने या नेविगेट करने के लिए कह सकते हैं।',
@@ -35,6 +37,7 @@ const RESPONSES: Record<string, Record<string, string>> = {
     unknown: 'मुझे समझ नहीं आया। कृपया अपना प्रश्न पुनः दोहराएं।',
   },
   en: {
+    greeting: "Hello! I am your Visual Assistant. Ask 'What is in front of me?', 'Read text', or 'Check currency'.",
     stop: 'Stopped.',
     repeat_empty: "I don't have anything to repeat yet.",
     help: "You can ask me to describe what's in front of you, read text, identify currency, describe your surroundings, or navigate somewhere.",
@@ -71,6 +74,14 @@ class CommandRouter {
     let isActionInterrupted = false;
 
     switch (detection.intent) {
+      case 'GREETING': {
+        responseMessage = this.getResponseText(
+          'greeting',
+          "Hello! I am your Visual Assistant. Ask 'What is in front of me?', 'Read text', or 'Check currency'."
+        );
+        break;
+      }
+
       case 'STOP': {
         await ttsService.stop();
         isActionInterrupted = true;
