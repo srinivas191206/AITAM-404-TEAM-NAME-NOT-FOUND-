@@ -17,6 +17,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
+import { ttsService } from '../../services/ttsService';
 import { useApp } from '../../context/AppContext';
 
 interface LanguageSelectionScreenProps {
@@ -72,6 +73,7 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
   const handleSelect = async (lang: LanguageOption) => {
     await hapticService.medium();
     onSelectLanguage(lang.code);
+    ttsService.setLanguage(lang.code);
     setVisualToast(`${lang.label} Selected`);
 
     if (activeMode === 'blind') {
