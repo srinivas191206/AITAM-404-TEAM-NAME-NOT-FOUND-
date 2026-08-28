@@ -6,6 +6,7 @@ export interface CameraFrameResult {
   width: number;
   height: number;
   timestamp: number;
+  base64?: string;
 }
 
 export type CameraPermissionStatus = 'granted' | 'denied' | 'undetermined';
@@ -42,8 +43,7 @@ class CameraService {
   }
 
   /**
-   * Capture a single frame on-demand for vision processing
-   * Optimized for fast on-device perception (0.6 quality, skip processing)
+   * Capture a single frame on-demand for vision processing with real Base64 image payload
    */
   public async captureFrameFromRef(
     cameraRef: React.RefObject<CameraView> | { current: CameraView | null }
@@ -55,8 +55,9 @@ class CameraService {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.6,
-        skipProcessing: true,
+        quality: 0.5,
+        base64: true,
+        skipProcessing: false,
         shutterSound: false,
       });
 
@@ -69,6 +70,7 @@ class CameraService {
         width: photo.width || 1280,
         height: photo.height || 720,
         timestamp: Date.now(),
+        base64: photo.base64,
       };
     } catch (err) {
       console.error('[CameraService] Error taking picture:', err);
