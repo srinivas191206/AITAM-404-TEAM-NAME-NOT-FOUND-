@@ -11,11 +11,18 @@ import {
   AppStateStatus,
 } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import { CameraView } from 'expo-camera';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { ttsService } from '../../services/ttsService';
 import { hapticService } from '../../services/hapticService';
 import { speechRecognitionService } from '../../services/speechRecognitionService';
+import { commandRouter, CommandRouteResult } from '../../services/commandRouter';
+import { RecognizedIntentType } from '../../services/intentService';
+import { visionService } from '../../services/visionService';
+import { cameraService } from '../../services/cameraService';
+import { DetectionResult } from '../../services/objectDetectionService';
+import { VisionCameraPreview } from '../../components/camera/VisionCameraPreview';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
 
@@ -79,11 +86,14 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   onOpenSettings,
 }) => {
   const [voiceState, setVoiceState] = useState<VoiceState>('READY');
-  const [transcript, setTranscript] = useState<string>('What time is it?');
+  const [transcript, setTranscript] = useState<string>('');
+  const [detectedIntent, setDetectedIntent] = useState<RecognizedIntentType | null>(null);
   const [responseMessage, setResponseMessage] = useState<string>(
-    'I heard you. Intelligent commands will be connected next.'
+    'Voice assistant ready. Tap the microphone area to speak.'
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [activeDetections, setActiveDetections] = useState<DetectionResult[]>([]);
 
   const palette = Colors.tealSlate || {
     background: '#F7FAFA',
@@ -96,27 +106,53 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   const isMountedRef = useRef(true);
+  const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
+
+    // Register VisionService capture delegate & visibility listener
+    visionService.registerCaptureDelegate(async () => {
+      return await cameraService.captureFrameFromRef(cameraRef);
+    });
+
+    visionService.registerVisibilityListener((visible: boolean) => {
+      if (isMountedRef.current) {
+        setIsCameraActive(visible);
+      }
+    });
+
+    visionService.registerDetectionListener((detections: DetectionResult[]) => {
+      if (isMountedRef.current) {
+        setActiveDetections(detections);
+      }
+    });
+
+    // App state listener to stop audio & camera on background/minimize
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => {
       isMountedRef.current = false;
       subscription.remove();
-      cleanupAudio();
+      visionService.registerCaptureDelegate(null);
+      visionService.registerVisibilityListener(null);
+      visionService.registerDetectionListener(null);
+      cleanupAllResources();
     };
   }, []);
 
   const handleAppStateChange = (nextAppState: AppStateStatus) => {
     if (nextAppState === 'background' || nextAppState === 'inactive') {
-      cleanupAudio();
+      cleanupAllResources();
     }
   };
 
-  const cleanupAudio = async () => {
+  const cleanupAllResources = async () => {
     await speechRecognitionService.stopListening();
     await ttsService.stop();
+    visionService.closeCamera();
     if (isMountedRef.current) {
+      setIsCameraActive(false);
+      setActiveDetections([]);
       setVoiceState('READY');
     }
   };
@@ -148,7 +184,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       },
       onResult: (spokenText: string) => {
         if (isMountedRef.current) {
-          processSpokenTranscript(spokenText);
+          processSpokenCommand(spokenText);
         }
       },
       onError: (err: string) => {
@@ -168,46 +204,78 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
-  const processSpokenTranscript = async (rawTranscript: string) => {
+  const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
-    setResponseMessage('Processing recognized speech...');
+    setResponseMessage('Analyzing...');
 
-    setTimeout(async () => {
-      if (!isMountedRef.current) return;
+    // Route through central Command Router
+    const routeResult: CommandRouteResult = await commandRouter.routeCommand(rawTranscript);
 
-      const normalized = rawTranscript.trim().toLowerCase();
-      let responseText = '';
+    if (!isMountedRef.current) return;
 
-      if (normalized === 'hello' || normalized.startsWith('hello') || normalized === 'hi') {
-        responseText = "Hello. I'm listening.";
-      } else if (
-        normalized.includes('how are you') ||
-        normalized.includes('how are you doing')
-      ) {
-        responseText = "I'm doing well. How can I help you?";
+    setDetectedIntent(routeResult.intent);
+    setResponseMessage(routeResult.responseMessage);
+
+    // If STOP was commanded, interrupt and reset immediately
+    if (routeResult.isActionInterrupted) {
+      await hapticService.success();
+      visionService.closeCamera();
+      setIsCameraActive(false);
+      setActiveDetections([]);
+      setVoiceState('READY');
+      return;
+    }
+
+    // Haptic feedback based on recognition result & intent
+    if (routeResult.intent === 'UNKNOWN') {
+      await hapticService.error();
+    } else if (routeResult.intent === 'VISION_QUERY') {
+      const spatial = visionService.getLastSpatialAnalysis();
+      if (spatial && spatial.hasMovementRelevantObstacle) {
+        await hapticService.medium();
       } else {
-        responseText = 'I heard you. Intelligent commands will be connected next.';
+        await hapticService.light();
       }
+    } else if (routeResult.intent === 'READ_TEXT' || routeResult.intent === 'CURRENCY_QUERY') {
+      await hapticService.light();
+    } else {
+      await hapticService.success();
+    }
 
-      setResponseMessage(responseText);
-      setVoiceState('RESPONDING');
+    setVoiceState('RESPONDING');
 
-      await ttsService.speak(responseText, {
-        onDone: async () => {
-          if (isMountedRef.current) {
-            await hapticService.light();
-            setVoiceState('READY');
+    // Speak response aloud via TTS
+    await ttsService.speak(routeResult.responseMessage, {
+      onDone: async () => {
+        if (isMountedRef.current) {
+          await hapticService.light();
+          if (
+            routeResult.intent === 'VISION_QUERY' ||
+            routeResult.intent === 'READ_TEXT' ||
+            routeResult.intent === 'CURRENCY_QUERY'
+          ) {
+            visionService.closeCamera();
+            setIsCameraActive(false);
           }
-        },
-        onError: () => {
-          if (isMountedRef.current) {
-            setVoiceState('READY');
+          setVoiceState('READY');
+        }
+      },
+      onError: () => {
+        if (isMountedRef.current) {
+          if (
+            routeResult.intent === 'VISION_QUERY' ||
+            routeResult.intent === 'READ_TEXT' ||
+            routeResult.intent === 'CURRENCY_QUERY'
+          ) {
+            visionService.closeCamera();
+            setIsCameraActive(false);
           }
-        },
-      });
-    }, 400);
+          setVoiceState('READY');
+        }
+      },
+    });
   };
 
   const handleSilenceTimeout = async () => {
@@ -256,7 +324,23 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     if (phrase === '__SILENCE__') {
       handleSilenceTimeout();
     } else {
-      processSpokenTranscript(phrase);
+      processSpokenCommand(phrase);
+    }
+  };
+
+  const getStateAccessibilityLabel = () => {
+    switch (voiceState) {
+      case 'LISTENING':
+        return 'Assistant is listening. Speak your voice command.';
+      case 'PROCESSING':
+        return 'Assistant is processing your command.';
+      case 'RESPONDING':
+        return `Assistant is responding: ${responseMessage}`;
+      case 'ERROR':
+        return `Assistant error: ${errorMessage || responseMessage}`;
+      case 'READY':
+      default:
+        return 'Assistant is ready. Tap the microphone area to speak.';
     }
   };
 
@@ -281,7 +365,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             accessibilityLabel="Open Settings"
             accessibilityRole="button"
             onPress={async () => {
-              await cleanupAudio();
+              await cleanupAllResources();
               onOpenSettings();
             }}
             style={[styles.settingsIconBtn, { backgroundColor: palette.accentLight }]}
@@ -289,6 +373,15 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             <SettingsGearIcon color={palette.accentTeal} size={22} />
           </TouchableOpacity>
         </View>
+
+        {/* ACTIVE CAMERA VIEW (WHEN VISION / OCR / CURRENCY ACTIVE) */}
+        {isCameraActive ? (
+          <VisionCameraPreview
+            cameraRef={cameraRef}
+            detections={activeDetections}
+            intent={detectedIntent}
+          />
+        ) : null}
 
         {/* STATE INDICATOR HUD CARD */}
         <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
@@ -332,7 +425,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </Text>
           <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
             {voiceState === 'LISTENING'
-              ? 'Say "Hello" or "How are you?"'
+              ? 'Say "What is in front of me?" or "Read text"'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
@@ -353,35 +446,35 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           <View style={styles.testChipsRow}>
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying Hello"
+              accessibilityLabel="Simulate saying What is in front of me"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('Hello')}
+              onPress={() => triggerSimulation('What is in front of me?')}
               style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
               <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Hello"</Text>
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What's in front of me?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying How are you"
+              accessibilityLabel="Simulate saying Read text"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('How are you?')}
+              onPress={() => triggerSimulation('Read text')}
               style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
               <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"How are you?"</Text>
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Read text"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying What time is it"
+              accessibilityLabel="Simulate saying Check currency"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('What time is it?')}
+              onPress={() => triggerSimulation('Check currency')}
               style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
               <SpeakerIcon color={palette.accentTeal} size={15} />
-              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What time is it?"</Text>
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
