@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   AppState,
   AppStateStatus,
+  Vibration,
 } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { CameraView } from 'expo-camera';
@@ -219,6 +220,59 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
+  // NavAIgate Gestures & Mode Engine (from NavAIgate-master BlindMode.kt & mainScreen.kt)
+  const [navAIgateMode, setNavAIgateMode] = useState<'navigation' | 'assistant' | 'reading'>('assistant');
+  const lastTapRef = useRef<number>(0);
+  const singleTapTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleNavAIgateDoubleTap = async () => {
+    // NavAIgate dual-vibration pattern: [0, 200, 100, 200]
+    Vibration.vibrate([0, 200, 100, 200]);
+    if (navAIgateMode === 'navigation') {
+      setNavAIgateMode('assistant');
+      await ttsService.speak('Assistant mode activated. Speak any question about your environment.');
+    } else {
+      setNavAIgateMode('navigation');
+      await ttsService.speak('Navigation mode activated. Real-time path guidance active.');
+      processSpokenCommand("What is in front of me?");
+    }
+  };
+
+  const handleNavAIgateLongPress = async () => {
+    // NavAIgate long vibration pattern: 500ms
+    Vibration.vibrate(500);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    setNavAIgateMode('reading');
+    await ttsService.speak(`Current time is ${timeStr}. Entering text reading mode.`);
+    processSpokenCommand('Read text');
+  };
+
+  const handleNavAIgateSingleTap = async () => {
+    await hapticService.light();
+    await ttsService.speak(
+      'NavAIgate accessibility controls: Double tap anywhere to toggle navigation and assistant mode. Long press to hear the time and read text. Or speak naturally anytime.'
+    );
+  };
+
+  const handleScreenTouch = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_GAP = 320;
+    if (now - lastTapRef.current < DOUBLE_TAP_GAP) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      handleNavAIgateDoubleTap();
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+      singleTapTimerRef.current = setTimeout(() => {
+        handleNavAIgateSingleTap();
+      }, DOUBLE_TAP_GAP + 20);
+    }
+  };
+
   /**
    * Continuous Hands-Free Auto-Listening Loop for Blind Users
    */
@@ -277,6 +331,15 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
   const processSpokenCommand = async (rawTranscript: string) => {
     await speechRecognitionService.stopListening();
+
+    const alphanumeric = (rawTranscript || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+    if (!alphanumeric || alphanumeric.length < 2) {
+      console.log('[HandsFree] Ignored noise transcript:', rawTranscript);
+      setVoiceState('READY');
+      setTimeout(startListeningHandsFree, 1000);
+      return;
+    }
+
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
@@ -372,6 +435,11 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   const handleVoiceError = async (errType: string) => {
+    if (errType === 'no_speech_detected') {
+      handleSilenceTimeout();
+      return;
+    }
+
     await hapticService.error();
     setVoiceState('ERROR');
 
@@ -441,6 +509,49 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                 <SettingsGearIcon color={palette.accentTeal} size={22} />
               </TouchableOpacity>
             </View>
+
+            {/* NAVAIGATE ACCESSIBILITY GESTURE & MODE BANNER */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleScreenTouch}
+              onLongPress={handleNavAIgateLongPress}
+              delayLongPress={600}
+              accessible={true}
+              accessibilityLabel={`NavAIgate ${navAIgateMode.toUpperCase()} mode active. Double tap to toggle mode, long press to hear time and read text.`}
+              style={[
+                styles.navAIgateBadge,
+                {
+                  backgroundColor:
+                    navAIgateMode === 'navigation'
+                      ? '#10B98122'
+                      : navAIgateMode === 'reading'
+                      ? '#8B5CF622'
+                      : '#3B82F622',
+                  borderColor:
+                    navAIgateMode === 'navigation'
+                      ? '#10B981'
+                      : navAIgateMode === 'reading'
+                      ? '#8B5CF6'
+                      : '#3B82F6',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.navAIgateBadgeText,
+                  {
+                    color:
+                      navAIgateMode === 'navigation'
+                        ? '#059669'
+                        : navAIgateMode === 'reading'
+                        ? '#7C3AED'
+                        : '#2563EB',
+                  },
+                ]}
+              >
+                ● NAVAIGATE {navAIgateMode.toUpperCase()} MODE (TAP FOR HELP, 2x TAP SWITCH)
+              </Text>
+            </TouchableOpacity>
 
             {/* ACTIVE CAMERA VIEWPORT (ALWAYS MOUNTED FOR INSTANT PERCEPTION) */}
             <VisionCameraPreview
@@ -734,5 +845,19 @@ const styles = StyleSheet.create({
   testChipText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  navAIgateBadge: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navAIgateBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });

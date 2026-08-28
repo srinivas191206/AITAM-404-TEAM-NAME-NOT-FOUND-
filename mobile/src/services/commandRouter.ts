@@ -3,6 +3,7 @@ import { visionService } from './visionService';
 import { ttsService } from './ttsService';
 import { destinationResolver } from './destinationResolver';
 import { routeService } from './routeService';
+import { navAIgateEngine } from './navAIgateEngine';
 
 export interface CommandRouteResult {
   intent: RecognizedIntentType;
@@ -128,8 +129,11 @@ class CommandRouter {
       }
 
       case 'SCENE_DESCRIPTION': {
-        const result = await visionService.queryScene();
-        responseMessage = result.message || this.getResponseText('scene_description', "I couldn't analyze the scene.");
+        const spatial = visionService.getLastSpatialAnalysis();
+        const sceneSummary = spatial
+          ? `${spatial.spokenSummary}. Critical obstacle present: ${spatial.hasMovementRelevantObstacle ? 'Yes' : 'No'}.`
+          : 'Scene ahead.';
+        responseMessage = await navAIgateEngine.generateNavigationGuidance(sceneSummary);
         break;
       }
 
@@ -154,6 +158,21 @@ class CommandRouter {
 
       case 'UNKNOWN':
       default: {
+        // NavAIgate Conversational Environment Q&A AI (GeminiAPI 1.kt)
+        try {
+          const spatial = visionService.getLastSpatialAnalysis();
+          const sceneContext = spatial
+            ? `${spatial.spokenSummary}. Obstacles: ${spatial.hasMovementRelevantObstacle ? 'Yes' : 'None'}`
+            : 'Environment in camera view';
+          const qaAnswer = await navAIgateEngine.answerEnvironmentQuery(rawInput, sceneContext);
+          if (qaAnswer && qaAnswer.trim().length > 0) {
+            responseMessage = qaAnswer;
+            break;
+          }
+        } catch {
+          // fallback to help
+        }
+
         responseMessage = this.getResponseText(
           'unknown',
           "I didn't understand that. You can ask me to read something, describe your surroundings, identify currency, or navigate somewhere."

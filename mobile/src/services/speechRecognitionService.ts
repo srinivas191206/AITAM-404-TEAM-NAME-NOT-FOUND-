@@ -179,7 +179,8 @@ class SpeechRecognitionService {
       try {
         // Transcribe physical microphone recording using Whisper Large V3
         const transcript = await groqVisionService.transcribeAudio(recordedUri);
-        if (transcript && transcript.trim().length > 0) {
+        const alphanumeric = (transcript || '').replace(/[^a-zA-Z0-9]/g, '').trim();
+        if (transcript && alphanumeric.length >= 2) {
           cb.onResult(transcript.trim());
           return;
         }

@@ -194,6 +194,54 @@ class GroqVisionService {
 
     return null;
   }
+
+  public async chatCompletion(
+    messages: Array<{ role: string; content: string }>,
+    model: string = 'llama-3.3-70b-versatile'
+  ): Promise<string | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const activeKey = this.getActiveKey();
+      if (!activeKey) break;
+
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.3,
+            max_tokens: 400,
+          }),
+        });
+
+        if (response.status === 429 || response.status === 401 || response.status === 403) {
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          console.warn(`[GroqVisionService] Chat API Error (${response.status}):`, errBody);
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content && content.trim().length > 0) {
+          return content.trim();
+        }
+      } catch (err) {
+        console.warn(`[GroqVisionService] Chat request error:`, err);
+        this.markKeyRateLimited(activeKey);
+      }
+    }
+    return null;
+  }
 }
 
 export const groqVisionService = new GroqVisionService();
