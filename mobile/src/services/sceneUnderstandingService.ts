@@ -5,6 +5,7 @@ import {
   DetectionPipelineResult,
 } from './objectDetectionService';
 import { SpatialAnalysisResult } from './spatialAwarenessService';
+import { groqVisionService } from './groqVisionService';
 
 export type EnvironmentType =
   | 'INDOOR_ROOM'
@@ -40,9 +41,6 @@ export interface SceneProcessingResult {
 class SceneUnderstandingService {
   private isProcessing: boolean = false;
 
-  /**
-   * Infer general environment context from detected object distribution
-   */
   public inferEnvironment(detections: DetectionResult[]): {
     type: EnvironmentType;
     description: string;
@@ -92,9 +90,6 @@ class SceneUnderstandingService {
     return null;
   }
 
-  /**
-   * Synthesize concise 1-2 sentence scene description for blind user
-   */
   public synthesizeSceneNarrative(
     detections: DetectionResult[],
     spatial: SpatialAnalysisResult | null,
@@ -104,7 +99,6 @@ class SceneUnderstandingService {
       return "I couldn't understand the scene clearly. Please try again.";
     }
 
-    // Prioritize top elements
     const topDetections = detections.slice(0, 3);
     const leftItems = topDetections.filter((d) => d.position === 'LEFT');
     const centerItems = topDetections.filter((d) => d.position === 'CENTER');
@@ -164,7 +158,7 @@ class SceneUnderstandingService {
   }
 
   /**
-   * Execute on-device Scene Understanding on captured camera frame
+   * Execute Hybrid Scene Understanding: Groq LLaMA-3.2 Vision + On-Device Failover
    */
   public async describeScene(frame: CameraFrameResult): Promise<SceneProcessingResult> {
     const startTime = Date.now();
@@ -181,14 +175,31 @@ class SceneUnderstandingService {
     try {
       this.isProcessing = true;
 
-      // 1. Reuse existing On-Device Object Detection + Spatial Awareness (Phase 5)
+      // 1. Try Ultra-Fast Multimodal Groq LLaMA-3.2 Vision Model with 10-Key Auto-Rotation
+      if (frame.base64) {
+        const groqDescription = await groqVisionService.describeScene(frame.base64);
+        if (groqDescription && groqDescription.length > 10) {
+          const inferenceTimeMs = Date.now() - startTime;
+          return {
+            success: true,
+            message: groqDescription,
+            sceneResult: {
+              summary: groqDescription,
+              spokenText: groqDescription,
+              elements: [],
+              confidence: 0.98,
+            },
+            inferenceTimeMs,
+          };
+        }
+      }
+
+      // 2. Fallback: On-Device Object Detection + Spatial Synthesis
       const detectionPipeline: DetectionPipelineResult =
         await objectDetectionService.detectObjects(frame);
 
-      // 2. Infer environment context
       const environment = this.inferEnvironment(detectionPipeline.detections);
 
-      // 3. Synthesize natural 1-2 sentence narrative
       const spokenText = this.synthesizeSceneNarrative(
         detectionPipeline.detections,
         detectionPipeline.spatialAnalysis,
@@ -207,7 +218,7 @@ class SceneUnderstandingService {
         elements: sceneElements,
         summary: spokenText,
         spokenText,
-        confidence: 0.9,
+        confidence: 0.92,
       };
 
       const inferenceTimeMs = Date.now() - startTime;
