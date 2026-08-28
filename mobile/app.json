@@ -4,20 +4,10 @@
     "slug": "access-plus",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0E17"
-    },
+    "newArchEnabled": false,
     "android": {
       "package": "com.accessplus.app",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A0E17"
-      },
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
