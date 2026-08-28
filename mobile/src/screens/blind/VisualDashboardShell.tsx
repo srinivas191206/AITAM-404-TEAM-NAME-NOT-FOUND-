@@ -15,6 +15,8 @@ import { Spacing } from '../../theme/spacing';
 import { ttsService } from '../../services/ttsService';
 import { hapticService } from '../../services/hapticService';
 import { speechRecognitionService } from '../../services/speechRecognitionService';
+import { commandRouter, CommandRouteResult } from '../../services/commandRouter';
+import { RecognizedIntentType } from '../../services/intentService';
 
 export type VoiceState = 'READY' | 'LISTENING' | 'PROCESSING' | 'RESPONDING' | 'ERROR';
 
@@ -27,6 +29,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 }) => {
   const [voiceState, setVoiceState] = useState<VoiceState>('READY');
   const [transcript, setTranscript] = useState<string>('');
+  const [detectedIntent, setDetectedIntent] = useState<RecognizedIntentType | null>(null);
   const [responseMessage, setResponseMessage] = useState<string>(
     'Voice assistant ready. Tap the microphone area to speak.'
   );
@@ -95,7 +98,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       },
       onResult: (spokenText: string) => {
         if (isMountedRef.current) {
-          processSpokenTranscript(spokenText);
+          processSpokenCommand(spokenText);
         }
       },
       onError: (err: string) => {
@@ -116,51 +119,52 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   /**
-   * Process recognized speech transcript through Phase 4.1 Temporary Response System
+   * Process spoken command through Phase 4.2 Intent Understanding & Command Router
    */
-  const processSpokenTranscript = async (rawTranscript: string) => {
+  const processSpokenCommand = async (rawTranscript: string) => {
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
-    setResponseMessage('Processing recognized speech...');
+    setResponseMessage('Understanding command...');
 
-    // Small processing pause to mimic natural speech turn
-    setTimeout(async () => {
-      if (!isMountedRef.current) return;
+    // Route through central Command Router
+    const routeResult: CommandRouteResult = await commandRouter.routeCommand(rawTranscript);
 
-      const normalized = rawTranscript.trim().toLowerCase();
-      let responseText = '';
+    if (!isMountedRef.current) return;
 
-      // Phase 4.1 Temporary Response Rules
-      if (normalized === 'hello' || normalized.startsWith('hello') || normalized === 'hi') {
-        responseText = "Hello. I'm listening.";
-      } else if (
-        normalized.includes('how are you') ||
-        normalized.includes('how are you doing')
-      ) {
-        responseText = "I'm doing well. How can I help you?";
-      } else {
-        responseText = 'I heard you. Intelligent commands will be connected next.';
-      }
+    setDetectedIntent(routeResult.intent);
+    setResponseMessage(routeResult.responseMessage);
 
-      setResponseMessage(responseText);
-      setVoiceState('RESPONDING');
+    // If STOP was commanded, interrupt and reset immediately
+    if (routeResult.isActionInterrupted) {
+      await hapticService.success();
+      setVoiceState('READY');
+      return;
+    }
 
-      // Speak response aloud via TTS
-      await ttsService.speak(responseText, {
-        onDone: async () => {
-          if (isMountedRef.current) {
-            await hapticService.light();
-            setVoiceState('READY');
-          }
-        },
-        onError: () => {
-          if (isMountedRef.current) {
-            setVoiceState('READY');
-          }
-        },
-      });
-    }, 400);
+    // Haptic feedback based on recognition result
+    if (routeResult.intent === 'UNKNOWN') {
+      await hapticService.error();
+    } else {
+      await hapticService.success();
+    }
+
+    setVoiceState('RESPONDING');
+
+    // Speak response aloud via TTS
+    await ttsService.speak(routeResult.responseMessage, {
+      onDone: async () => {
+        if (isMountedRef.current) {
+          await hapticService.light();
+          setVoiceState('READY');
+        }
+      },
+      onError: () => {
+        if (isMountedRef.current) {
+          setVoiceState('READY');
+        }
+      },
+    });
   };
 
   /**
@@ -219,7 +223,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     if (phrase === '__SILENCE__') {
       handleSilenceTimeout();
     } else {
-      processSpokenTranscript(phrase);
+      processSpokenCommand(phrase);
     }
   };
 
@@ -228,9 +232,9 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       case 'LISTENING':
         return 'Assistant is listening. Speak your voice command.';
       case 'PROCESSING':
-        return 'Assistant is processing your voice.';
+        return 'Assistant is processing your command.';
       case 'RESPONDING':
-        return `Assistant is speaking: ${responseMessage}`;
+        return `Assistant is responding: ${responseMessage}`;
       case 'ERROR':
         return `Assistant error: ${errorMessage || responseMessage}`;
       case 'READY':
@@ -299,7 +303,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               ? 'Microphone is active. Tap to cancel listening.'
               : 'Voice assistant. Activate microphone.'
           }
-          accessibilityHint="Double tap to speak to the assistant"
+          accessibilityHint="Double tap to speak a command to the assistant"
           accessibilityRole="button"
           activeOpacity={0.8}
           onPress={handleMicrophonePress}
@@ -318,74 +322,181 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             {voiceState === 'LISTENING'
               ? 'LISTENING...'
               : voiceState === 'PROCESSING'
-              ? 'PROCESSING...'
+              ? 'UNDERSTANDING...'
               : voiceState === 'RESPONDING'
-              ? 'SPEAKING RESPONSE'
+              ? 'RESPONDING'
               : voiceState === 'ERROR'
               ? 'TAP TO RETRY'
               : 'TAP TO SPEAK'}
           </Text>
           <Text style={styles.micSubtitle}>
             {voiceState === 'LISTENING'
-              ? 'Say "Hello" or "How are you?"'
+              ? 'Speak naturally (e.g. "What\'s in front of me?")'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
 
-        {/* RECOGNIZED TRANSCRIPT DISPLAY */}
+        {/* RECOGNIZED COMMAND & INTENT CARD */}
         {transcript ? (
           <View
             accessible={true}
-            accessibilityLabel={`Recognized speech: ${transcript}`}
+            accessibilityLabel={`Recognized command: ${transcript}, Intent: ${detectedIntent || 'Pending'}`}
             style={styles.transcriptCard}
           >
-            <Text style={styles.transcriptLabel}>RECOGNIZED SPEECH:</Text>
+            <View style={styles.transcriptHeaderRow}>
+              <Text style={styles.transcriptLabel}>RECOGNIZED COMMAND</Text>
+              {detectedIntent ? (
+                <View style={styles.intentBadge}>
+                  <Text style={styles.intentBadgeText}>{detectedIntent}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.transcriptText}>"{transcript}"</Text>
           </View>
         ) : null}
 
-        {/* ACCESSIBILITY SPEECH TESTING TRAY (FOR VERIFICATION) */}
+        {/* TEST MATRIX TRAY (PHASE 4.2 TEST COMMANDS) */}
         <View style={styles.testTray}>
-          <Text style={styles.testTrayLabel}>TEST VOICE INTERACTION (SIMULATION):</Text>
+          <Text style={styles.testTrayLabel}>TEST COMMAND INTENT MATRIX:</Text>
           <View style={styles.testChipsRow}>
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying Hello"
+              accessibilityLabel="Test What's in front of me"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('Hello')}
+              onPress={() => triggerSimulation("What's in front of me?")}
               style={styles.testChip}
             >
-              <Text style={styles.testChipText}>"Hello"</Text>
+              <Text style={styles.testChipText}>"What's in front of me?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying How are you"
+              accessibilityLabel="Test What is ahead"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('How are you?')}
+              onPress={() => triggerSimulation('What is ahead?')}
               style={styles.testChip}
             >
-              <Text style={styles.testChipText}>"How are you?"</Text>
+              <Text style={styles.testChipText}>"What is ahead?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate saying What time is it"
+              accessibilityLabel="Test Read this"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('What time is it?')}
+              onPress={() => triggerSimulation('Read this.')}
               style={styles.testChip}
             >
-              <Text style={styles.testChipText}>"What time is it?"</Text>
+              <Text style={styles.testChipText}>"Read this."</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               accessible={true}
-              accessibilityLabel="Simulate silence timeout"
+              accessibilityLabel="Test What does this say"
               accessibilityRole="button"
-              onPress={() => triggerSimulation('__SILENCE__')}
-              style={[styles.testChip, styles.testChipSilence]}
+              onPress={() => triggerSimulation('What does this say?')}
+              style={styles.testChip}
             >
-              <Text style={styles.testChipText}>Silence Timeout</Text>
+              <Text style={styles.testChipText}>"What does this say?"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Describe my surroundings"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Describe my surroundings.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Describe my surroundings."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test What's around me"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation("What's around me?")}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"What's around me?"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test What currency is this"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('What currency is this?')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"What currency is this?"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Take me to the nearest hospital"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Take me to the nearest hospital.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Take me to nearest hospital"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Navigate to JNTU Kakinada"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Navigate to JNTU Kakinada.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Navigate to JNTU Kakinada"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Help"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Help.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Help."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Stop"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Stop.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Stop."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Repeat that"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Repeat that.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Repeat that."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Ambiguous command"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Tell me about this.')}
+              style={styles.testChip}
+            >
+              <Text style={styles.testChipText}>"Tell me about this."</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Test Unknown command"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Play jazz music.')}
+              style={[styles.testChip, styles.testChipUnknown]}
+            >
+              <Text style={styles.testChipText}>"Play jazz music"</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -550,12 +661,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
   },
+  transcriptHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
   transcriptLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.blindPrimary,
+    color: Colors.textMediumEmphasis,
     letterSpacing: 0.5,
-    marginBottom: 4,
+  },
+  intentBadge: {
+    backgroundColor: Colors.blindSurface,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Spacing.radiusSm,
+    borderWidth: 1,
+    borderColor: Colors.blindBorder,
+  },
+  intentBadgeText: {
+    color: Colors.blindPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   transcriptText: {
     fontSize: 18,
@@ -585,17 +715,17 @@ const styles = StyleSheet.create({
   },
   testChip: {
     backgroundColor: Colors.surfaceInteractive,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs + 3,
     borderRadius: Spacing.radiusSm,
     borderWidth: 1,
     borderColor: Colors.borderSubtle,
   },
-  testChipSilence: {
+  testChipUnknown: {
     borderColor: '#78350F',
   },
   testChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.textHighEmphasis,
   },
