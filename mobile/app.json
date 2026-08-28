@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Access+",
+    "slug": "access-plus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E17"
+    },
+    "android": {
+      "package": "com.accessplus.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0E17"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.VIBRATE",
+        "android.permission.INTERNET",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Access+ requires camera access to assist visually impaired users in detecting obstacles, reading text, and recognizing scenes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Access+ requires location access for voice navigation, safe-zone monitoring, and emergency SOS broadcasting."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Access+ requires microphone access for live captions, speech recognition, and environmental sound alert detection."
+        }
+      ]
+    ]
+  }
+}
