@@ -15,10 +15,10 @@ interface AppContextType {
   activeMode: AccessibilityMode;
   selectedLanguage: LanguageCode;
   userProfile: UserProfile;
-  setMode: (mode: AccessibilityMode) => void;
-  setLanguage: (lang: LanguageCode) => void;
-  updateProfile: (profile: Partial<UserProfile>) => void;
-  goToOnboardingStep: (step: OnboardingStep) => void;
+  setMode: (mode: AccessibilityMode) => Promise<void>;
+  setLanguage: (lang: LanguageCode) => Promise<void>;
+  updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  goToOnboardingStep: (step: OnboardingStep) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   resetOnboarding: () => Promise<void>;
 }
@@ -41,7 +41,7 @@ const DEFAULT_USER_PROFILE: UserProfile = {
   isOnboardingCompleted: false,
 };
 
-const STORAGE_KEY = '@access_plus_app_state_v1';
+const STORAGE_KEY = '@access_plus_app_state_v2';
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -65,8 +65,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (parsed.userProfile) {
           setUserProfile(parsed.userProfile);
           setIsOnboardingCompleted(!!parsed.userProfile.isOnboardingCompleted);
-          setActiveMode(parsed.userProfile.mode);
+          setActiveMode(parsed.userProfile.mode || null);
           setSelectedLanguage(parsed.userProfile.language || 'en');
+        }
+        if (parsed.onboardingStep && !parsed.userProfile?.isOnboardingCompleted) {
+          setOnboardingStep(parsed.onboardingStep);
         }
       }
     } catch (e) {
@@ -76,39 +79,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const persistState = async (updatedProfile: UserProfile) => {
+  const persistState = async (
+    updatedProfile: UserProfile,
+    step: OnboardingStep = onboardingStep
+  ) => {
     try {
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ userProfile: updatedProfile })
+        JSON.stringify({
+          userProfile: updatedProfile,
+          onboardingStep: step,
+        })
       );
     } catch (e) {
       console.warn('Failed to persist app state:', e);
     }
   };
 
-  const setMode = (mode: AccessibilityMode) => {
+  const setMode = async (mode: AccessibilityMode) => {
     setActiveMode(mode);
     const updated = { ...userProfile, mode };
     setUserProfile(updated);
-    persistState(updated);
+    await persistState(updated, onboardingStep);
   };
 
-  const setLanguage = (language: LanguageCode) => {
+  const setLanguage = async (language: LanguageCode) => {
     setSelectedLanguage(language);
     const updated = { ...userProfile, language };
     setUserProfile(updated);
-    persistState(updated);
+    await persistState(updated, onboardingStep);
   };
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
+  const updateProfile = async (updates: Partial<UserProfile>) => {
     const updated = { ...userProfile, ...updates };
     setUserProfile(updated);
-    persistState(updated);
+    await persistState(updated, onboardingStep);
   };
 
-  const goToOnboardingStep = (step: OnboardingStep) => {
+  const goToOnboardingStep = async (step: OnboardingStep) => {
     setOnboardingStep(step);
+    await persistState(userProfile, step);
   };
 
   const completeOnboarding = async () => {
@@ -121,7 +131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserProfile(updated);
     setIsOnboardingCompleted(true);
     setOnboardingStep('completed');
-    await persistState(updated);
+    await persistState(updated, 'completed');
 
     if (activeMode === 'blind') {
       await outputService.announce('Setup complete. Welcome to Visual Assistance.');

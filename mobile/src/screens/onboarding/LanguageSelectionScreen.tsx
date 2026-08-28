@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { LanguageCode, LanguageOption } from '../../types';
+import { LanguageCode, LanguageOption, AccessibilityMode } from '../../types';
+import { LanguageRegistry, getLanguageLabel } from '../../config/languages';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { AppHeader } from '../../components/AppHeader';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
+import { useApp } from '../../context/AppContext';
 
 interface LanguageSelectionScreenProps {
   selectedLanguage: LanguageCode;
@@ -22,57 +24,82 @@ interface LanguageSelectionScreenProps {
   onBack: () => void;
 }
 
-const SUPPORTED_LANGUAGES: LanguageOption[] = [
-  { code: 'en', label: 'English', nativeLabel: 'English (Default)', isAvailable: true },
-  { code: 'te', label: 'Telugu', nativeLabel: 'తెలుగు (Telugu)', isAvailable: true },
-  { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी (Hindi)', isAvailable: true },
-  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ் (Tamil)', isAvailable: true },
-  { code: 'es', label: 'Spanish', nativeLabel: 'Español (Spanish)', isAvailable: true },
-  { code: 'fr', label: 'French', nativeLabel: 'Français (French)', isAvailable: true },
-];
-
 export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = ({
   selectedLanguage,
   onSelectLanguage,
   onContinue,
   onBack,
 }) => {
+  const { activeMode } = useApp();
+  const [visualToast, setVisualToast] = useState<string | null>(null);
+
   useEffect(() => {
-    outputService.announce(
-      'Step 2 of 5: Choose your preferred language. English is currently selected.',
-      'normal'
-    );
-  }, []);
+    if (activeMode === 'blind') {
+      outputService.announce(
+        `Step 2 of 5: Please select your language. ${getLanguageLabel(
+          selectedLanguage
+        )} is currently selected. Double tap to change language, or tap the continue button at the bottom.`,
+        'normal'
+      );
+    }
+  }, [activeMode]);
 
   const handleSelect = async (lang: LanguageOption) => {
     await hapticService.medium();
     onSelectLanguage(lang.code);
-    outputService.announce(`${lang.label} selected. Tap continue at bottom.`);
+    setVisualToast(`${lang.label} Selected`);
+
+    if (activeMode === 'blind') {
+      await outputService.announce(`${lang.label} selected.`);
+    } else if (activeMode === 'deaf') {
+      outputService.broadcastVisualAlert({
+        title: 'Language Selected',
+        message: `${lang.label} selected.`,
+        severity: 'info',
+        timestamp: new Date().toLocaleTimeString(),
+      });
+    }
+  };
+
+  const handleContinuePress = async () => {
+    await hapticService.medium();
+    if (activeMode === 'blind') {
+      await outputService.announce(`Continuing to Registration with ${getLanguageLabel(selectedLanguage)}.`);
+    }
+    onContinue();
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
-      <AppHeader title="Language Selection" onBack={onBack} />
+      <AppHeader title="Select Language" onBack={onBack} />
+
+      {visualToast ? (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>✓ {visualToast}</Text>
+        </View>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.intro}>
           <Text style={styles.stepLabel}>STEP 2 OF 5</Text>
-          <Text style={styles.title}>Select Your Language</Text>
+          <Text style={styles.title}>Language Preferences</Text>
           <Text style={styles.subtitle}>
-            Voice assistance, speech-to-text, and screen text will adapt to your language.
+            {activeMode === 'blind'
+              ? 'Voice responses and screen reader guidance will use this language.'
+              : 'Screen text and live captions will adapt to this language.'}
           </Text>
         </View>
 
         <View style={styles.languagesList}>
-          {SUPPORTED_LANGUAGES.map((lang) => {
+          {LanguageRegistry.supportedLanguages.map((lang) => {
             const isSelected = selectedLanguage === lang.code;
             return (
               <TouchableOpacity
                 key={lang.code}
                 accessible={true}
                 accessibilityLabel={`${lang.label}. ${lang.nativeLabel}`}
-                accessibilityHint="Double tap to choose this language"
+                accessibilityHint="Double tap to select this language"
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
                 activeOpacity={0.8}
@@ -95,12 +122,13 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
 
         <TouchableOpacity
           accessible={true}
-          accessibilityLabel="Continue to Registration"
+          accessibilityLabel={`Continue to Registration with ${getLanguageLabel(selectedLanguage)}`}
+          accessibilityHint="Double tap to proceed to personal information step"
           accessibilityRole="button"
-          onPress={onContinue}
+          onPress={handleContinuePress}
           style={styles.continueBtn}
         >
-          <Text style={styles.continueText}>Continue →</Text>
+          <Text style={styles.continueText}>Continue to Registration →</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -117,7 +145,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxxl,
   },
   intro: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   stepLabel: {
     fontSize: 12,
@@ -136,6 +164,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textMediumEmphasis,
     lineHeight: 22,
+  },
+  toast: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderBottomWidth: 1,
+    borderColor: Colors.borderSubtle,
+    alignItems: 'center',
+  },
+  toastText: {
+    color: Colors.success,
+    fontWeight: '700',
+    fontSize: 14,
   },
   languagesList: {
     gap: Spacing.sm,
@@ -166,6 +207,7 @@ const styles = StyleSheet.create({
   },
   langLabelSelected: {
     color: Colors.blindPrimary,
+    fontWeight: '800',
   },
   nativeLabel: {
     fontSize: 14,
