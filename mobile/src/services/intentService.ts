@@ -294,6 +294,9 @@ class IntentService {
       'how many rupees',
       'is this money',
       'recognize currency',
+      'can you identify this note',
+      'which rupee note is this',
+      'what denomination is this',
     ];
     return phrases.some((p) => text.includes(p)) || /currency|money note|rupee note|how much cash/.test(text);
   }

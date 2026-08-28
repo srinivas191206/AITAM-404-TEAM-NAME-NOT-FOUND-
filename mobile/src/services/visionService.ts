@@ -6,6 +6,7 @@ import {
 } from './objectDetectionService';
 import { SpatialAnalysisResult } from './spatialAwarenessService';
 import { ocrService, OCRProcessingResult, OCRResult } from './ocrService';
+import { currencyService, CurrencyProcessingResult, CurrencyResult } from './currencyService';
 
 export interface VisionFrameMetadata {
   uri: string;
@@ -20,6 +21,7 @@ export interface VisionProcessingResult {
   detections?: DetectionResult[];
   spatialAnalysis?: SpatialAnalysisResult;
   ocrResult?: OCRResult;
+  currencyResult?: CurrencyResult;
   frameMetadata?: VisionFrameMetadata;
   inferenceTimeMs?: number;
   error?: string;
@@ -37,6 +39,7 @@ class VisionService {
   private lastDetections: DetectionResult[] = [];
   private lastSpatialAnalysis: SpatialAnalysisResult | null = null;
   private lastOcrResult: OCRResult | null = null;
+  private lastCurrencyResult: CurrencyResult | null = null;
 
   /**
    * Register the active CameraView capture delegate
@@ -153,7 +156,6 @@ class VisionService {
    * Primary vision query handler invoked by Command Router for VISION_QUERY
    */
   public async queryVision(): Promise<VisionProcessingResult> {
-    // 1. Permission check
     const permitted = await this.ensurePermission();
     if (!permitted) {
       return {
@@ -164,36 +166,24 @@ class VisionService {
       };
     }
 
-    // 2. Open camera
     await this.openCamera();
-
-    // Stabilization delay for camera viewfinder
     await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // 3. Capture frame
     const frame = await this.captureFrame();
 
-    if (!frame) {
-      const syntheticFrame: CameraFrameResult = {
-        uri: 'file://simulated_frame.jpg',
-        width: 1080,
-        height: 1920,
-        timestamp: Date.now(),
-      };
-      return await this.processFrame(syntheticFrame);
-    }
+    const targetFrame: CameraFrameResult = frame || {
+      uri: 'file://simulated_vision_frame.jpg',
+      width: 1080,
+      height: 1920,
+      timestamp: Date.now(),
+    };
 
-    // 4. Process frame through On-Device Pipeline
-    const result = await this.processFrame(frame);
-
-    return result;
+    return await this.processFrame(targetFrame);
   }
 
   /**
    * Primary OCR query handler invoked by Command Router for READ_TEXT (Phase 6.1)
    */
   public async queryOcr(): Promise<VisionProcessingResult> {
-    // 1. Permission check
     const permitted = await this.ensurePermission();
     if (!permitted) {
       return {
@@ -204,13 +194,8 @@ class VisionService {
       };
     }
 
-    // 2. Open camera
     await this.openCamera();
-
-    // Stabilization delay for camera viewfinder
     await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // 3. Capture frame
     const frame = await this.captureFrame();
 
     const targetFrame: CameraFrameResult = frame || {
@@ -220,7 +205,6 @@ class VisionService {
       timestamp: Date.now(),
     };
 
-    // 4. Process frame through On-Device OCR Pipeline
     const ocrProcessing: OCRProcessingResult = await ocrService.recognizeText(targetFrame);
     this.lastOcrResult = ocrProcessing.ocrResult || null;
 
@@ -241,6 +225,52 @@ class VisionService {
     };
   }
 
+  /**
+   * Primary Currency query handler invoked by Command Router for CURRENCY_QUERY (Phase 6.2)
+   */
+  public async queryCurrency(): Promise<VisionProcessingResult> {
+    const permitted = await this.ensurePermission();
+    if (!permitted) {
+      return {
+        success: false,
+        message:
+          "I can't access the camera. You can enable camera access in your phone settings.",
+        error: 'permission_denied',
+      };
+    }
+
+    await this.openCamera();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const frame = await this.captureFrame();
+
+    const targetFrame: CameraFrameResult = frame || {
+      uri: 'file://simulated_currency_frame.jpg',
+      width: 1080,
+      height: 1920,
+      timestamp: Date.now(),
+    };
+
+    const currencyProcessing: CurrencyProcessingResult =
+      await currencyService.identifyCurrency(targetFrame);
+    this.lastCurrencyResult = currencyProcessing.currencyResult || null;
+
+    const frameMetadata: VisionFrameMetadata = {
+      uri: targetFrame.uri,
+      width: targetFrame.width,
+      height: targetFrame.height,
+      timestamp: targetFrame.timestamp,
+    };
+
+    return {
+      success: currencyProcessing.success,
+      message: currencyProcessing.message,
+      currencyResult: currencyProcessing.currencyResult,
+      frameMetadata,
+      inferenceTimeMs: currencyProcessing.inferenceTimeMs,
+      error: currencyProcessing.error,
+    };
+  }
+
   public getLastDetections(): DetectionResult[] {
     return this.lastDetections;
   }
@@ -251,6 +281,10 @@ class VisionService {
 
   public getLastOcrResult(): OCRResult | null {
     return this.lastOcrResult;
+  }
+
+  public getLastCurrencyResult(): CurrencyResult | null {
+    return this.lastCurrencyResult;
   }
 
   public getIsActive(): boolean {

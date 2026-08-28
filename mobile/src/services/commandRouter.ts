@@ -1,6 +1,5 @@
 ﻿import { intentService, IntentDetectionResult, RecognizedIntentType } from './intentService';
 import { visionService } from './visionService';
-import { currencyService } from './currencyService';
 import { sceneUnderstandingService } from './sceneUnderstandingService';
 import { ttsService } from './ttsService';
 
@@ -61,14 +60,14 @@ class CommandRouter {
         break;
       }
 
-      case 'SCENE_DESCRIPTION': {
-        const result = await sceneUnderstandingService.describeScene();
+      case 'CURRENCY_QUERY': {
+        const result = await visionService.queryCurrency();
         responseMessage = result.message;
         break;
       }
 
-      case 'CURRENCY_QUERY': {
-        const result = await currencyService.identifyCurrency();
+      case 'SCENE_DESCRIPTION': {
+        const result = await sceneUnderstandingService.describeScene();
         responseMessage = result.message;
         break;
       }
