@@ -1,5 +1,6 @@
 ﻿import { Platform, PermissionsAndroid } from 'react-native';
 import { Audio } from 'expo-av';
+import { groqVisionService } from './groqVisionService';
 
 export type MicPermissionStatus = 'granted' | 'denied' | 'permanently_denied';
 
@@ -20,11 +21,7 @@ class SpeechRecognitionService {
    * Check if speech recognition & microphone are supported
    */
   public async isAvailable(): Promise<boolean> {
-    try {
-      return true;
-    } catch {
-      return false;
-    }
+    return true;
   }
 
   /**
@@ -52,7 +49,6 @@ class SpeechRecognitionService {
         }
       }
 
-      // Fallback via Expo Audio
       const response = await Audio.requestPermissionsAsync();
       if (response.granted) return 'granted';
       return response.canAskAgain ? 'denied' : 'permanently_denied';
@@ -78,7 +74,7 @@ class SpeechRecognitionService {
   }
 
   /**
-   * Start a controlled listening session
+   * Start a live audio recording session from physical microphone
    */
   public async startListening(callbacks: SpeechRecognitionCallbacks): Promise<boolean> {
     try {
@@ -102,7 +98,7 @@ class SpeechRecognitionService {
       this.callbacks = callbacks;
       this.isListening = true;
 
-      // 3. Audio session mode setup (clean foreground recording)
+      // 3. Audio session mode setup
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -110,29 +106,25 @@ class SpeechRecognitionService {
         shouldDuckAndroid: true,
       });
 
-      // 4. Create lightweight native recording to capture microphone activity
-      try {
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.LOW_QUALITY
-        );
-        this.recordingInstance = recording;
-      } catch (recErr) {
-        console.warn('[SpeechRecognitionService] Audio recording init note:', recErr);
-      }
+      // 4. Create high quality native recording
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      this.recordingInstance = recording;
 
       this.callbacks.onStart?.();
 
-      // 5. Controlled silence timeout (7 seconds max listening window)
+      // 5. Silence / Max speech timer (6 seconds window for voice command)
       this.clearSilenceTimer();
-      this.silenceTimer = setTimeout(() => {
+      this.silenceTimer = setTimeout(async () => {
         if (this.isListening) {
-          this.handleSilenceTimeout();
+          await this.stopListeningAndTranscribe();
         }
-      }, 7000);
+      }, 6000);
 
       return true;
     } catch (error) {
-      this.handleError(error);
+      console.warn('[SpeechRecognitionService] Audio recording init error:', error);
       callbacks.onError('start_failed');
       await this.stopListening();
       return false;
@@ -140,17 +132,21 @@ class SpeechRecognitionService {
   }
 
   /**
-   * Stop active listening session and release audio hardware
+   * Stop recording and transcribe real voice with Groq Whisper Large V3
    */
-  public async stopListening(): Promise<void> {
+  public async stopListeningAndTranscribe(): Promise<void> {
     this.clearSilenceTimer();
     this.isListening = false;
+    const cb = this.callbacks;
+
+    let recordedUri: string | null = null;
 
     if (this.recordingInstance) {
       try {
         await this.recordingInstance.stopAndUnloadAsync();
-      } catch {
-        // Ignore unloading errors
+        recordedUri = this.recordingInstance.getURI();
+      } catch (err) {
+        console.warn('[SpeechRecognitionService] Stop error:', err);
       } finally {
         this.recordingInstance = null;
       }
@@ -164,12 +160,58 @@ class SpeechRecognitionService {
         shouldDuckAndroid: false,
       });
     } catch {
-      // Ignore cleanup error
+      // ignore
+    }
+
+    if (recordedUri && cb) {
+      try {
+        // Transcribe physical microphone recording using Whisper Large V3
+        const transcript = await groqVisionService.transcribeAudio(recordedUri);
+        if (transcript && transcript.trim().length > 0) {
+          cb.onResult(transcript.trim());
+          return;
+        }
+      } catch (sttErr) {
+        console.warn('[SpeechRecognitionService] Transcription failure:', sttErr);
+      }
+    }
+
+    if (cb) {
+      cb.onError('no_speech_detected');
     }
   }
 
   /**
-   * Handle speech recognition result (e.g. from user speech or test simulation)
+   * Stop active listening session immediately
+   */
+  public async stopListening(): Promise<void> {
+    this.clearSilenceTimer();
+    this.isListening = false;
+
+    if (this.recordingInstance) {
+      try {
+        await this.recordingInstance.stopAndUnloadAsync();
+      } catch {
+        // ignore
+      } finally {
+        this.recordingInstance = null;
+      }
+    }
+
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Handle speech recognition result (from test simulation or manual text)
    */
   public handleResult(transcript: string): void {
     if (!this.isListening && !this.callbacks) return;
@@ -185,31 +227,6 @@ class SpeechRecognitionService {
     }
   }
 
-  /**
-   * Handle silence timeout
-   */
-  private handleSilenceTimeout(): void {
-    const cb = this.callbacks;
-    this.stopListening();
-    if (cb) {
-      if (cb.onSilenceTimeout) {
-        cb.onSilenceTimeout();
-      } else {
-        cb.onError('silence_timeout');
-      }
-    }
-  }
-
-  /**
-   * Centralized error handler
-   */
-  public handleError(error: unknown): void {
-    console.warn('[SpeechRecognitionService Error]', error);
-  }
-
-  /**
-   * Check if currently listening
-   */
   public getIsListening(): boolean {
     return this.isListening;
   }

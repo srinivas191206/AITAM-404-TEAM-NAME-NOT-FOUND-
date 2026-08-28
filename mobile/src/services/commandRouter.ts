@@ -1,6 +1,7 @@
 import { intentService, IntentDetectionResult, RecognizedIntentType } from './intentService';
 import { visionService } from './visionService';
 import { ttsService } from './ttsService';
+import { destinationResolver } from './destinationResolver';
 
 export interface CommandRouteResult {
   intent: RecognizedIntentType;
@@ -131,8 +132,8 @@ class CommandRouter {
       }
 
       case 'NAVIGATION': {
-        const dest = detection.parameters?.destination || 'your destination';
-        responseMessage = this.getResponseText('navigation', `Navigating to ${dest} is being prepared.`);
+        const resolution = await destinationResolver.resolveDestination(rawInput);
+        responseMessage = resolution.spokenMessage;
         break;
       }
 

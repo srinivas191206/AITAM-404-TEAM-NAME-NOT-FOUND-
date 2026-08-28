@@ -544,6 +544,39 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                   <SpeakerIcon color={palette.accentTeal} size={15} />
                   <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Take me to the nearest hospital"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Take me to the nearest hospital.')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Nearest hospital"</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Navigate to JNTU Kakinada"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Navigate to JNTU Kakinada.')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"JNTU Kakinada"</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessible={true}
+                  accessibilityLabel="Simulate saying Take me home"
+                  accessibilityRole="button"
+                  onPress={() => triggerSimulation('Take me home.')}
+                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+                >
+                  <SpeakerIcon color={palette.accentTeal} size={15} />
+                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Take me home"</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>

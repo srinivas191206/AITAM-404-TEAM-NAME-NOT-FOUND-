@@ -146,6 +146,57 @@ class GroqVisionService {
   public async answerVisualQuery(base64Image: string, userQuestion: string): Promise<string | null> {
     return await this.analyzeWithVision(base64Image, userQuestion);
   }
+
+  public async transcribeAudio(fileUri: string): Promise<string | null> {
+    if (!fileUri || this.keys.length === 0) return null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const activeKey = this.getActiveKey();
+      if (!activeKey) break;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: fileUri,
+          type: 'audio/m4a',
+          name: 'audio.m4a',
+        } as any);
+        formData.append('model', 'whisper-large-v3');
+        formData.append('temperature', '0.0');
+
+        const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeKey}`,
+          },
+          body: formData,
+        });
+
+        if (response.status === 429 || response.status === 401 || response.status === 403) {
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(`[GroqVisionService] Whisper STT API Error:`, errText);
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        const data = await response.json();
+        const text = data?.text?.trim();
+        if (text) {
+          return text;
+        }
+      } catch (err) {
+        console.warn('[GroqVisionService] Whisper request error:', err);
+        this.markKeyRateLimited(activeKey);
+      }
+    }
+
+    return null;
+  }
 }
 
 export const groqVisionService = new GroqVisionService();

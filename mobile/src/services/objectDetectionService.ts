@@ -1,4 +1,4 @@
-﻿import { CameraFrameResult } from './cameraService';
+import { CameraFrameResult } from './cameraService';
 import {
   spatialAwarenessService,
   SpatialAnalysisResult,
@@ -7,6 +7,7 @@ import {
 } from './spatialAwarenessService';
 import { imageAnalyzer } from '../utils/imageAnalyzer';
 import { NativeVisionBridge } from './nativeVisionBridge';
+import { groqVisionService } from './groqVisionService';
 
 export type ImagePosition = HorizontalPosition;
 
@@ -224,7 +225,47 @@ class ObjectDetectionService {
         });
       }
 
-      // 2. If native returned no objects, run high-precision real pixel analysis
+      // 2. Open-Vocabulary Multimodal Object Detection via Groq Vision
+      if (rawDetections.length === 0 && frame.base64 && groqVisionService.hasActiveKeys()) {
+        try {
+          const prompt = `List the primary visible objects in the scene and their positions (LEFT, CENTER, or RIGHT). 
+Format strictly as JSON array of objects:
+[{"label": "person", "position": "LEFT", "confidence": 0.95}]`;
+          const groqResp = await groqVisionService.answerVisualQuery(frame.base64, prompt);
+          if (groqResp) {
+            const jsonMatch = groqResp.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const items = JSON.parse(jsonMatch[0]);
+              if (Array.isArray(items) && items.length > 0) {
+                items.slice(0, 4).forEach((item: any, idx: number) => {
+                  const pos: HorizontalPosition = ['LEFT', 'CENTER', 'RIGHT'].includes(item.position?.toUpperCase())
+                    ? item.position.toUpperCase()
+                    : 'CENTER';
+                  const xPos = pos === 'LEFT' ? Math.round(imageWidth * 0.15) : pos === 'RIGHT' ? Math.round(imageWidth * 0.70) : Math.round(imageWidth * 0.40);
+                  rawDetections.push({
+                    id: `groq_obj_${idx}`,
+                    label: String(item.label || 'object').toLowerCase(),
+                    confidence: typeof item.confidence === 'number' ? item.confidence : 0.92,
+                    boundingBox: {
+                      x: xPos,
+                      y: Math.round(imageHeight * 0.3),
+                      width: Math.round(imageWidth * 0.3),
+                      height: Math.round(imageHeight * 0.4),
+                    },
+                    centerX: xPos + Math.round(imageWidth * 0.15),
+                    centerY: Math.round(imageHeight * 0.5),
+                    position: pos,
+                  });
+                });
+              }
+            }
+          }
+        } catch (groqErr) {
+          console.warn('[ObjectDetectionService] Groq vision object detection note:', groqErr);
+        }
+      }
+
+      // 3. If still empty, run high-precision real pixel analysis
       if (rawDetections.length === 0) {
         const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
 
