@@ -1,5 +1,6 @@
 ﻿import { CameraFrameResult } from './cameraService';
 import { imageAnalyzer, ColorHistogram } from '../utils/imageAnalyzer';
+import { NativeVisionBridge } from './nativeVisionBridge';
 
 export type CurrencyDenomination = 10 | 20 | 50 | 100 | 200 | 500 | 2000;
 
@@ -20,6 +21,7 @@ export interface CurrencyResult {
   detectedType: 'NOTE' | 'COIN' | 'UNKNOWN';
   spokenText: string;
   detectedColor?: string;
+  detectedText?: string;
   boundingBox?: { x: number; y: number; width: number; height: number };
 }
 
@@ -110,6 +112,24 @@ class CurrencyService {
   }
 
   /**
+   * Extract INR denomination numeral or text from OCR string
+   */
+  public extractDenominationFromText(rawText: string): CurrencyDenomination | null {
+    if (!rawText) return null;
+    const text = rawText.toUpperCase();
+
+    if (/\b2000\b/.test(text) || text.includes('TWO THOUSAND')) return 2000;
+    if (/\b500\b/.test(text) || text.includes('FIVE HUNDRED')) return 500;
+    if (/\b200\b/.test(text) || text.includes('TWO HUNDRED')) return 200;
+    if (/\b100\b/.test(text) || text.includes('ONE HUNDRED')) return 100;
+    if (/\b50\b/.test(text) || text.includes('FIFTY')) return 50;
+    if (/\b20\b/.test(text) || text.includes('TWENTY')) return 20;
+    if (/\b10\b/.test(text) || text.includes('TEN')) return 10;
+
+    return null;
+  }
+
+  /**
    * Real On-Device INR Multi-Spectral Colorimetric & Dimensional Classifier
    */
   public classifyNoteFromHistogram(hist: ColorHistogram): {
@@ -187,7 +207,7 @@ class CurrencyService {
   }
 
   /**
-   * Execute real on-device Currency Recognition on captured camera frame
+   * Execute Dual-Signal Currency Recognition (ML Kit OCR + Multi-Spectral Color Profile)
    */
   public async identifyCurrency(frame: CameraFrameResult): Promise<CurrencyProcessingResult> {
     const startTime = Date.now();
@@ -204,14 +224,43 @@ class CurrencyService {
     try {
       this.isProcessing = true;
 
-      // Extract real image color distribution & features from captured frame
-      const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
-      const classification = this.classifyNoteFromHistogram(analysis.histogram);
+      // SIGNAL 1: Real Native ML Kit OCR Numeral Extraction
+      let ocrDenomination: CurrencyDenomination | null = null;
+      let rawDetectedText = '';
 
-      if (
-        !classification.denomination ||
-        classification.confidence < this.confidenceThreshold
-      ) {
+      const nativeOcr = await NativeVisionBridge.recognizeText(frame.uri);
+      if (nativeOcr && nativeOcr.text) {
+        rawDetectedText = nativeOcr.text;
+        ocrDenomination = this.extractDenominationFromText(nativeOcr.text);
+      }
+
+      // SIGNAL 2: Multi-Spectral Color & Pixel Histogram Analysis
+      const analysis = imageAnalyzer.analyzeBase64(frame.base64 || '');
+      const colorClassification = this.classifyNoteFromHistogram(analysis.histogram);
+
+      // FUSION & DUAL-SIGNAL VERIFICATION
+      let finalDenomination: CurrencyDenomination | null = null;
+      let finalConfidence = 0.0;
+
+      if (ocrDenomination && colorClassification.denomination) {
+        if (ocrDenomination === colorClassification.denomination) {
+          // Dual agreement -> Maximum confidence
+          finalDenomination = ocrDenomination;
+          finalConfidence = 0.99;
+        } else {
+          // Priority to OCR text recognition with solid confidence
+          finalDenomination = ocrDenomination;
+          finalConfidence = 0.94;
+        }
+      } else if (ocrDenomination) {
+        finalDenomination = ocrDenomination;
+        finalConfidence = 0.95;
+      } else if (colorClassification.denomination) {
+        finalDenomination = colorClassification.denomination;
+        finalConfidence = colorClassification.confidence;
+      }
+
+      if (!finalDenomination || finalConfidence < this.confidenceThreshold) {
         return {
           success: false,
           message:
@@ -221,18 +270,16 @@ class CurrencyService {
         };
       }
 
-      const spokenText = this.generateSpokenResponse(
-        classification.denomination,
-        classification.confidence
-      );
+      const spokenText = this.generateSpokenResponse(finalDenomination, finalConfidence);
 
       const currencyResult: CurrencyResult = {
         currency: 'INR',
-        denomination: classification.denomination,
-        confidence: classification.confidence,
+        denomination: finalDenomination,
+        confidence: finalConfidence,
         detectedType: 'NOTE',
         spokenText,
         detectedColor: analysis.histogram.dominantColor,
+        detectedText: rawDetectedText,
         boundingBox: {
           x: Math.round((frame.width || 1080) * 0.1),
           y: Math.round((frame.height || 1920) * 0.25),
