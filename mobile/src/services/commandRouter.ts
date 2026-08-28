@@ -2,6 +2,7 @@ import { intentService, IntentDetectionResult, RecognizedIntentType } from './in
 import { visionService } from './visionService';
 import { ttsService } from './ttsService';
 import { destinationResolver } from './destinationResolver';
+import { routeService } from './routeService';
 
 export interface CommandRouteResult {
   intent: RecognizedIntentType;
@@ -85,6 +86,7 @@ class CommandRouter {
 
       case 'STOP': {
         await ttsService.stop();
+        routeService.cancel();
         isActionInterrupted = true;
         responseMessage = this.getResponseText('stop', 'Stopped.');
         break;
@@ -133,7 +135,12 @@ class CommandRouter {
 
       case 'NAVIGATION': {
         const resolution = await destinationResolver.resolveDestination(rawInput);
-        responseMessage = resolution.spokenMessage;
+        if (resolution.status === 'RESOLVED' && resolution.navigationRequest) {
+          const routeResult = await routeService.calculateRoute(resolution.navigationRequest);
+          responseMessage = routeResult.spokenMessage;
+        } else {
+          responseMessage = resolution.spokenMessage;
+        }
         break;
       }
 
