@@ -155,7 +155,15 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 export const useLocationContext = () => {
   const context = useContext(LocationContext);
   if (!context) {
-    throw new Error('useLocationContext must be used within LocationProvider');
+    return {
+      currentLocation: null,
+      locationPermissionGranted: false,
+      isInsideSafeZone: true,
+      distanceFromSafeZoneCenter: null,
+      setSafeZone: () => {},
+      requestLocationPermission: async () => false,
+      refreshLocation: async () => null,
+    };
   }
   return context;
 };

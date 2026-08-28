@@ -109,15 +109,15 @@ class OCRService {
       // 1. PRIMARY ENGINE: PaddleOCR (Baidu PP-OCRv6)
       if (frame.base64) {
         const endpoints = [
-          'http://10.0.2.2:5001/ocr',
           'http://10.204.134.150:5001/ocr',
+          'http://10.0.2.2:5001/ocr',
           'http://localhost:5001/ocr',
         ];
 
         for (const ep of endpoints) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
 
             const paddleResponse = await fetch(ep, {
               method: 'POST',

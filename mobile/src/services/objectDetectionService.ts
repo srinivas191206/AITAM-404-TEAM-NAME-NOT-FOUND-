@@ -202,15 +202,15 @@ class ObjectDetectionService {
       // 1. PRIMARY NEURAL DETECTOR: YOLOv8 Object Detection Engine
       if (frame.base64) {
         const endpoints = [
-          'http://10.0.2.2:5001/detect',
           'http://10.204.134.150:5001/detect',
+          'http://10.0.2.2:5001/detect',
           'http://localhost:5001/detect',
         ];
 
         for (const ep of endpoints) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
 
             const resp = await fetch(ep, {
               method: 'POST',

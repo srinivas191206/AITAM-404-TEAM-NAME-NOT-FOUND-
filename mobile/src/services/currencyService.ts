@@ -103,8 +103,8 @@ class CurrencyService {
       this.isProcessing = true;
 
       const endpoints = [
-        'http://10.0.2.2:5001/currency',
         'http://10.204.134.150:5001/currency',
+        'http://10.0.2.2:5001/currency',
         'http://localhost:5001/currency',
       ];
 
@@ -112,7 +112,7 @@ class CurrencyService {
       for (const ep of endpoints) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
 
           const response = await fetch(ep, {
             method: 'POST',

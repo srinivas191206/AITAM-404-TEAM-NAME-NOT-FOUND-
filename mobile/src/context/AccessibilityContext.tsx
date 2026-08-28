@@ -165,7 +165,18 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useAccessibility = () => {
   const context = useContext(AccessibilityContext);
   if (!context) {
-    throw new Error('useAccessibility must be used within AccessibilityProvider');
+    return {
+      mode: 'blind' as any,
+      setMode: async () => {},
+      userProfile: DEFAULT_PROFILE,
+      updateUserProfile: async () => {},
+      addEmergencyContact: async () => {},
+      removeEmergencyContact: async () => {},
+      sosActive: false,
+      triggerSos: () => {},
+      cancelSos: () => {},
+      sosCountdown: null,
+    };
   }
   return context;
 };

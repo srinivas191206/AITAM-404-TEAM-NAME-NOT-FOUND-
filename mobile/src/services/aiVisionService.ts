@@ -1,3 +1,10 @@
+import { geminiVisionService } from './geminiVisionService';
+import { groqVisionService } from './groqVisionService';
+import { ocrService } from './ocrService';
+import { currencyService } from './currencyService';
+import { objectDetectionService } from './objectDetectionService';
+import { CameraFrameResult } from './cameraService';
+
 export type VisionTaskType =
   | 'scene_description'
   | 'ocr_text'
@@ -15,71 +22,123 @@ export interface VisionAnalysisResult {
 }
 
 class AiVisionService {
-  private geminiApiKey: string = '';
-
-  public setApiKey(key: string) {
-    this.geminiApiKey = key;
-  }
-
-  /**
-   * Process a captured JPEG frame for on-demand accessibility perception
-   */
   public async analyzeImage(
     base64Image: string,
     task: VisionTaskType
   ): Promise<VisionAnalysisResult> {
-    const prompt = this.getPromptForTask(task);
+    const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
 
-    if (this.geminiApiKey && !this.geminiApiKey.includes('dummy')) {
+    const frame: CameraFrameResult = {
+      uri: `data:image/jpeg;base64,${cleanBase64}`,
+      width: 1080,
+      height: 1920,
+      timestamp: Date.now(),
+      base64: cleanBase64,
+    };
+
+    // 1. Specialized Task: OCR Text Reading
+    if (task === 'ocr_text') {
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: prompt },
-                    {
-                      inlineData: {
-                        mimeType: 'image/jpeg',
-                        data: base64Image,
-                      },
-                    },
-                  ],
-                },
-              ],
-              generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 250,
-              },
-            }),
-          }
-        );
-
-        if (response.ok) {
-          const json = await response.json();
-          const rawText =
-            json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
-            'No description returned.';
-
+        const ocrRes = await ocrService.recognizeText(frame);
+        if (ocrRes.success && ocrRes.ocrResult && ocrRes.ocrResult.spokenText) {
           return {
             task,
-            primaryDescription: rawText,
-            detailedText: rawText,
-            confidence: 0.94,
-            safeToWalk: !rawText.toLowerCase().includes('danger') && !rawText.toLowerCase().includes('blocked'),
+            primaryDescription: ocrRes.ocrResult.spokenText,
+            detailedText: ocrRes.ocrResult.cleanedText,
+            confidence: ocrRes.ocrResult.confidence || 0.95,
+            safeToWalk: true,
           };
         }
-      } catch (err) {
-        console.warn('[AiVisionService] Gemini API call failed, falling back to local heuristic:', err);
+      } catch (e) {
+        console.warn('[AiVisionService] OCR service error:', e);
       }
     }
 
-    // High-quality deterministic fallback for offline / mock testing in hackathons
-    return this.getSimulatedVisionResult(task);
+    // 2. Specialized Task: Indian Currency Recognition
+    if (task === 'currency_recognition') {
+      try {
+        const currRes = await currencyService.recognizeCurrency(frame);
+        if (currRes.success && currRes.currencyResult && currRes.currencyResult.spokenText) {
+          return {
+            task,
+            primaryDescription: currRes.currencyResult.spokenText,
+            detailedText: currRes.currencyResult.spokenText,
+            confidence: currRes.currencyResult.confidence || 0.95,
+            safeToWalk: true,
+          };
+        }
+      } catch (e) {
+        console.warn('[AiVisionService] Currency service error:', e);
+      }
+    }
+
+    // 3. Specialized Task: Obstacle Detection
+    if (task === 'obstacle_detection') {
+      try {
+        const detRes = await objectDetectionService.detectObjects(frame);
+        if (detRes.success && detRes.spokenResponse) {
+          const safe =
+            !detRes.spokenResponse.toLowerCase().includes('directly ahead') &&
+            !detRes.spokenResponse.toLowerCase().includes('caution');
+          return {
+            task,
+            primaryDescription: detRes.spokenResponse,
+            detailedText: detRes.spokenResponse,
+            confidence: 0.92,
+            safeToWalk: safe,
+          };
+        }
+      } catch (e) {
+        console.warn('[AiVisionService] Detection service error:', e);
+      }
+    }
+
+    // 4. Primary Visual Intelligence: Gemini 3.6 Flash Multi-Key Rotation
+    const prompt = this.getPromptForTask(task);
+    if (geminiVisionService.hasActiveKeys()) {
+      try {
+        const geminiText = await geminiVisionService.analyzeVision(cleanBase64, prompt);
+        if (geminiText && geminiText.trim().length > 0) {
+          const safe =
+            !geminiText.toLowerCase().includes('danger') &&
+            !geminiText.toLowerCase().includes('hazard') &&
+            !geminiText.toLowerCase().includes('blocked');
+          return {
+            task,
+            primaryDescription: geminiText.trim(),
+            detailedText: geminiText.trim(),
+            confidence: 0.96,
+            safeToWalk: safe,
+          };
+        }
+      } catch (err) {
+        console.warn('[AiVisionService] Gemini vision error:', err);
+      }
+    }
+
+    // 5. Secondary Multimodal Intelligence: Groq Vision
+    try {
+      const groqText = await groqVisionService.analyzeWithVision(cleanBase64, prompt);
+      if (groqText && groqText.trim().length > 0) {
+        return {
+          task,
+          primaryDescription: groqText.trim(),
+          detailedText: groqText.trim(),
+          confidence: 0.92,
+          safeToWalk: true,
+        };
+      }
+    } catch (err) {
+      console.warn('[AiVisionService] Groq vision error:', err);
+    }
+
+    // Fallback if completely offline
+    return {
+      task,
+      primaryDescription: 'Image captured. Please ensure network connectivity or point camera closer to the object.',
+      confidence: 0.5,
+      safeToWalk: true,
+    };
   }
 
   private getPromptForTask(task: VisionTaskType): string {
@@ -89,55 +148,13 @@ class AiVisionService {
       case 'ocr_text':
         return 'Read all visible text, signs, document lines, or labels in this image accurately and clearly. State the text directly.';
       case 'currency_recognition':
-        return 'Identify any currency banknotes or coins in this image. State the exact currency and denomination clearly (e.g. 500 Indian Rupees, 20 US Dollars).';
+        return 'Identify any Indian currency banknotes (₹10, ₹20, ₹50, ₹100, ₹200, ₹500) or other currency in this image. State the denomination clearly.';
       case 'obstacle_detection':
         return 'Identify any immediate obstacles directly in the walking path in front of the camera (stairs, curbs, chairs, poles, vehicles, holes). State if the path is clear or blocked.';
       case 'signboard_reading':
         return 'Read the main signboard, storefront name, or directional arrow in this image concisely.';
       default:
         return 'Describe what is in front of the camera concisely for a visually impaired user.';
-    }
-  }
-
-  private getSimulatedVisionResult(task: VisionTaskType): VisionAnalysisResult {
-    switch (task) {
-      case 'scene_description':
-        return {
-          task,
-          primaryDescription: 'You are facing an open pathway. There is a wooden door 3 meters ahead and a chair to your left.',
-          detailedText: 'Indoor hallway with good lighting. Clear center path with furniture to the left boundary.',
-          confidence: 0.9,
-          safeToWalk: true,
-        };
-      case 'ocr_text':
-        return {
-          task,
-          primaryDescription: 'Text detected: "AITAM Tech Innovation Center - Room 404 - Please Keep Silence".',
-          detailedText: 'AITAM Tech Innovation Center - Room 404 - Please Keep Silence',
-          confidence: 0.95,
-        };
-      case 'currency_recognition':
-        return {
-          task,
-          primaryDescription: 'Detected: 500 Indian Rupee banknote.',
-          detailedText: '₹500 INR Banknote in clear view.',
-          confidence: 0.98,
-        };
-      case 'obstacle_detection':
-        return {
-          task,
-          primaryDescription: 'Path is clear for the next 2 meters. Low step detected at 3 meters.',
-          detailedText: 'No immediate obstacles within 2 meters.',
-          confidence: 0.88,
-          safeToWalk: true,
-        };
-      case 'signboard_reading':
-        return {
-          task,
-          primaryDescription: 'Signboard reads: "Main Exit & Emergency Staircase Ahead".',
-          detailedText: 'Main Exit & Emergency Staircase',
-          confidence: 0.92,
-        };
     }
   }
 }
