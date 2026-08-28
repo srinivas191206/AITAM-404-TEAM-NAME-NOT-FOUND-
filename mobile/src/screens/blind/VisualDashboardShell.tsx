@@ -111,7 +111,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Register VisionService capture delegate & visibility listener
     visionService.registerCaptureDelegate(async () => {
       return await cameraService.captureFrameFromRef(cameraRef);
     });
@@ -128,7 +127,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       }
     });
 
-    // App state listener to stop audio & camera on background/minimize
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => {
       isMountedRef.current = false;
@@ -200,7 +198,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     });
 
     if (!started) {
-      // Permission or init failure handled inside onError
+      // Handled inside onError
     }
   };
 
@@ -210,7 +208,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     setTranscript(rawTranscript);
     setResponseMessage('Analyzing...');
 
-    // Route through central Command Router
     const routeResult: CommandRouteResult = await commandRouter.routeCommand(rawTranscript);
 
     if (!isMountedRef.current) return;
@@ -218,7 +215,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     setDetectedIntent(routeResult.intent);
     setResponseMessage(routeResult.responseMessage);
 
-    // If STOP was commanded, interrupt and reset immediately
     if (routeResult.isActionInterrupted) {
       await hapticService.success();
       visionService.closeCamera();
@@ -228,7 +224,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       return;
     }
 
-    // Haptic feedback based on recognition result & intent
     if (routeResult.intent === 'UNKNOWN') {
       await hapticService.error();
     } else if (routeResult.intent === 'VISION_QUERY') {
@@ -238,7 +233,11 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       } else {
         await hapticService.light();
       }
-    } else if (routeResult.intent === 'READ_TEXT' || routeResult.intent === 'CURRENCY_QUERY') {
+    } else if (
+      routeResult.intent === 'READ_TEXT' ||
+      routeResult.intent === 'CURRENCY_QUERY' ||
+      routeResult.intent === 'SCENE_DESCRIPTION'
+    ) {
       await hapticService.light();
     } else {
       await hapticService.success();
@@ -246,7 +245,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 
     setVoiceState('RESPONDING');
 
-    // Speak response aloud via TTS
     await ttsService.speak(routeResult.responseMessage, {
       onDone: async () => {
         if (isMountedRef.current) {
@@ -254,7 +252,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           if (
             routeResult.intent === 'VISION_QUERY' ||
             routeResult.intent === 'READ_TEXT' ||
-            routeResult.intent === 'CURRENCY_QUERY'
+            routeResult.intent === 'CURRENCY_QUERY' ||
+            routeResult.intent === 'SCENE_DESCRIPTION'
           ) {
             visionService.closeCamera();
             setIsCameraActive(false);
@@ -267,7 +266,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           if (
             routeResult.intent === 'VISION_QUERY' ||
             routeResult.intent === 'READ_TEXT' ||
-            routeResult.intent === 'CURRENCY_QUERY'
+            routeResult.intent === 'CURRENCY_QUERY' ||
+            routeResult.intent === 'SCENE_DESCRIPTION'
           ) {
             visionService.closeCamera();
             setIsCameraActive(false);
@@ -325,22 +325,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       handleSilenceTimeout();
     } else {
       processSpokenCommand(phrase);
-    }
-  };
-
-  const getStateAccessibilityLabel = () => {
-    switch (voiceState) {
-      case 'LISTENING':
-        return 'Assistant is listening. Speak your voice command.';
-      case 'PROCESSING':
-        return 'Assistant is processing your command.';
-      case 'RESPONDING':
-        return `Assistant is responding: ${responseMessage}`;
-      case 'ERROR':
-        return `Assistant error: ${errorMessage || responseMessage}`;
-      case 'READY':
-      default:
-        return 'Assistant is ready. Tap the microphone area to speak.';
     }
   };
 
@@ -425,7 +409,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
           </Text>
           <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
             {voiceState === 'LISTENING'
-              ? 'Say "What is in front of me?" or "Read text"'
+              ? 'Say "What\'s in front of me?" or "Describe surroundings"'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
@@ -475,6 +459,17 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
             >
               <SpeakerIcon color={palette.accentTeal} size={15} />
               <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessible={true}
+              accessibilityLabel="Simulate saying Describe surroundings"
+              accessibilityRole="button"
+              onPress={() => triggerSimulation('Describe my surroundings.')}
+              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
+            >
+              <SpeakerIcon color={palette.accentTeal} size={15} />
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Describe surroundings"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
