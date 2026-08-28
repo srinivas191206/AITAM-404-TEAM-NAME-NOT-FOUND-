@@ -6,7 +6,7 @@
 import { LOCAL_GEMINI_KEYS } from '../config/geminiKeys.local';
 
 const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 class GeminiVisionService {
   private keys: string[] = [...LOCAL_GEMINI_KEYS];
@@ -15,6 +15,10 @@ class GeminiVisionService {
 
   constructor() {
     this.keys = [...LOCAL_GEMINI_KEYS];
+  }
+
+  public hasActiveKeys(): boolean {
+    return this.keys.length > 0;
   }
 
   public setKeys(newKeys: string[]) {
@@ -43,6 +47,42 @@ class GeminiVisionService {
     console.warn(`[GeminiVisionService] Key rate limited. Rotating to next Gemini key in pool...`);
     this.keyCooldowns.set(key, Date.now() + 60000); // 1-minute cooldown
     this.currentKeyIndex = (this.currentKeyIndex + 1) % this.keys.length;
+  }
+
+  public async generateText(prompt: string, maxRetries: number = 3): Promise<string | null> {
+    if (this.keys.length === 0) return null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const activeKey = this.getActiveKey();
+      if (!activeKey) break;
+
+      try {
+        const response = await fetch(`${GEMINI_API_URL}?key=${activeKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        });
+
+        if (response.status === 429 || response.status === 401 || response.status === 403) {
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        if (!response.ok) {
+          this.markKeyRateLimited(activeKey);
+          continue;
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) return text;
+      } catch (err) {
+        this.markKeyRateLimited(activeKey);
+      }
+    }
+    return null;
   }
 
   public async analyzeVision(

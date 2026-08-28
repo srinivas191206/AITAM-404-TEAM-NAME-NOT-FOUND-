@@ -1,4 +1,4 @@
-﻿/**
+/**
  * NavAIgate Multi-Model AI Engine
  * Integrated from NavAIgate-master (NiteeshL)
  * 
@@ -67,10 +67,12 @@ Provide 3 to 4 concise, actionable navigation sentences for the blind user right
       console.warn('[NavAIgate] Groq navigation guidance note:', e);
     }
 
-    // Try Gemini if image available
-    if (base64Image) {
+    // Try Gemini text or vision
+    if (geminiVisionService.hasActiveKeys()) {
       try {
-        const geminiResp = await geminiVisionService.analyzeVision(base64Image, prompt);
+        const geminiResp = base64Image
+          ? await geminiVisionService.analyzeVision(base64Image, prompt)
+          : await geminiVisionService.generateText(prompt);
         if (geminiResp && geminiResp.trim().length > 0) {
           return geminiResp.trim();
         }
@@ -106,12 +108,16 @@ Answer the user directly and concisely:`;
       console.warn('[NavAIgate] Groq Q&A query note:', e);
     }
 
-    if (base64Image) {
+    if (geminiVisionService.hasActiveKeys()) {
       try {
-        const geminiResp = await geminiVisionService.analyzeVision(
-          base64Image,
-          `${NAVAIGATE_QA_INSTRUCTION}\nQuestion: ${question}`
-        );
+        const geminiResp = base64Image
+          ? await geminiVisionService.analyzeVision(
+              base64Image,
+              `${NAVAIGATE_QA_INSTRUCTION}\nQuestion: ${question}`
+            )
+          : await geminiVisionService.generateText(
+              `${NAVAIGATE_QA_INSTRUCTION}\n\n${userQuery}`
+            );
         if (geminiResp && geminiResp.trim().length > 0) {
           return geminiResp.trim();
         }
