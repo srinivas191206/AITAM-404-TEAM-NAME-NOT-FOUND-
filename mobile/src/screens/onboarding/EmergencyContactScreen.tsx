@@ -52,7 +52,9 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     onSaveContact({
       id: initialContact.id || '1',
       name: name.trim(),
+      phoneNumber: phone.trim(),
       phone: phone.trim(),
+      relationship: relation.trim() || 'Family',
       relation: relation.trim() || 'Family',
     });
     onContinue();

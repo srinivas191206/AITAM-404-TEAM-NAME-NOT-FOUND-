@@ -20,17 +20,44 @@ const DEFAULT_PROFILE: UserProfile = {
   id: 'user_' + Math.random().toString(36).substr(2, 9),
   fullName: 'Assisted User',
   name: 'Assisted User',
+  phoneNumber: '',
   phone: '',
+  address: '',
+  accessibilityMode: null,
   mode: null,
   language: 'en',
-  emergencyContact: { id: '1', name: 'Primary Guardian', phone: '+1234567890', relation: 'Family' },
+  createdAt: new Date().toISOString(),
+  onboardingCompleted: false,
+  isOnboardingCompleted: false,
+  emergencyContact: {
+    id: '1',
+    name: 'Primary Guardian',
+    phoneNumber: '+1234567890',
+    phone: '+1234567890',
+    relationship: 'Family',
+    relation: 'Family',
+  },
   emergencyContacts: [
-    { id: '1', name: 'Primary Guardian', phone: '+1234567890', relation: 'Family' },
-    { id: '2', name: 'Emergency Services', phone: '112', relation: 'Emergency' },
+    {
+      id: '1',
+      name: 'Primary Guardian',
+      phoneNumber: '+1234567890',
+      phone: '+1234567890',
+      relationship: 'Family',
+      relation: 'Family',
+    },
+    {
+      id: '2',
+      name: 'Emergency Services',
+      phoneNumber: '112',
+      phone: '112',
+      relationship: 'Emergency',
+      relation: 'Emergency',
+    },
   ],
+  guardian: { guardianLinked: false },
   guardianLinked: false,
   safeZoneRadiusMeters: 50,
-  isOnboardingCompleted: false,
 };
 
 const AccessibilityContext = createContext<AccessibilityContextType | null>(null);
@@ -53,7 +80,7 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
       if (stored) {
         const parsed: UserProfile = JSON.parse(stored);
         setUserProfile(parsed);
-        setModeState(parsed.mode);
+        setModeState(parsed.mode || parsed.accessibilityMode || null);
       }
     } catch (e) {
       console.warn('Failed to load profile from AsyncStorage', e);

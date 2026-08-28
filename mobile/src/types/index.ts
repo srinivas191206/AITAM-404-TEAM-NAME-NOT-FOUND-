@@ -16,6 +16,7 @@ export type OnboardingStep =
   | 'registration'
   | 'emergency_contact'
   | 'guardian_setup'
+  | 'review'
   | 'completed';
 
 export type AlertSeverity = 'info' | 'warning' | 'danger' | 'critical';
@@ -23,23 +24,40 @@ export type AlertSeverity = 'info' | 'warning' | 'danger' | 'critical';
 export interface EmergencyContact {
   id: string;
   name: string;
-  phone: string;
-  relation: string;
+  phoneNumber: string;
+  phone?: string; // alias
+  relationship: string;
+  relation?: string; // alias
+}
+
+export interface GuardianState {
+  id?: string;
+  name?: string;
+  phoneNumber?: string;
+  phone?: string;
+  email?: string;
+  code?: string;
+  guardianLinked: boolean;
 }
 
 export interface UserProfile {
   id: string;
   fullName: string;
   name?: string; // alias
-  phone: string;
+  phoneNumber: string;
+  phone?: string; // alias
   email?: string;
   address?: string;
-  mode: AccessibilityMode;
+  accessibilityMode: AccessibilityMode;
+  mode?: AccessibilityMode; // alias
   language: LanguageCode;
-  emergencyContact: EmergencyContact;
-  emergencyContacts?: EmergencyContact[];
-  guardianLinked: boolean;
-  guardianId?: string;
+  createdAt: string;
+  onboardingCompleted: boolean;
+  isOnboardingCompleted?: boolean; // alias
+  emergencyContacts: EmergencyContact[];
+  emergencyContact?: EmergencyContact; // primary contact alias
+  guardian: GuardianState;
+  guardianLinked?: boolean;
   guardianPhone?: string;
   guardianCode?: string;
   safeZoneCenter?: {
@@ -48,10 +66,26 @@ export interface UserProfile {
     address?: string;
   };
   safeZoneRadiusMeters?: number;
-  isOnboardingCompleted: boolean;
 }
 
 export type InteractionState = 'ready' | 'listening' | 'processing';
+
+export type VoiceRegistrationField =
+  | 'fullName'
+  | 'phoneNumber'
+  | 'address'
+  | 'emergencyContactName'
+  | 'emergencyContactPhone'
+  | 'emergencyContactRelation'
+  | 'guardianChoice'
+  | 'review';
+
+export interface VoiceRegistrationStepState {
+  field: VoiceRegistrationField;
+  prompt: string;
+  pendingValue: string;
+  isConfirming: boolean;
+}
 
 export interface SoundDetectionEvent {
   id: string;
@@ -69,7 +103,7 @@ export interface NavigationStep {
   durationSeconds: number;
   maneuverType: string;
   modifier?: string;
-  location: [number, number]; // [lon, lat]
+  location: [number, number];
 }
 
 export interface NavigationRoute {

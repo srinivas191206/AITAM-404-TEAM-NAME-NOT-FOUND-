@@ -7,7 +7,6 @@ import {
   StatusBar,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useApp } from '../../context/AppContext';
 import { Colors } from '../../theme/colors';
@@ -28,8 +27,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     setMode,
     setLanguage,
     resetOnboarding,
-    goToOnboardingStep,
   } = useApp();
+
+  const primaryContact =
+    userProfile.emergencyContact || userProfile.emergencyContacts?.[0];
 
   const handleReset = async () => {
     await resetOnboarding();
@@ -42,23 +43,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       <AppHeader title="Settings & Setup" onBack={onBack} />
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* SECTION 1: PROFILE SUMMARY */}
+        {/* SECTION 1: USER PROFILE SUMMARY */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>USER PROFILE</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Name:</Text>
-            <Text style={styles.infoValue}>{userProfile.fullName || 'Assisted User'}</Text>
+            <Text style={styles.infoValue}>{userProfile.fullName || userProfile.name || 'Assisted User'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Phone:</Text>
-            <Text style={styles.infoValue}>{userProfile.phone || 'Not specified'}</Text>
+            <Text style={styles.infoValue}>{userProfile.phoneNumber || userProfile.phone || 'Not specified'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Address:</Text>
+            <Text style={styles.infoValue}>{userProfile.address || 'Not specified'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Emergency Contact:</Text>
             <Text style={styles.infoValue}>
-              {userProfile.emergencyContact.name
-                ? `${userProfile.emergencyContact.name} (${userProfile.emergencyContact.phone})`
+              {primaryContact?.name
+                ? `${primaryContact.name} (${primaryContact.phoneNumber || primaryContact.phone})`
                 : 'Not configured'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Guardian Status:</Text>
+            <Text style={styles.infoValue}>
+              {userProfile.guardian?.guardianLinked || userProfile.guardianLinked
+                ? '✓ Linked'
+                : 'Set Up Later'}
             </Text>
           </View>
         </View>
@@ -115,7 +128,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>LANGUAGE</Text>
           <View style={styles.modeButtonsRow}>
-            {(['en', 'te', 'hi'] as const).map((langCode) => (
+            {(['en', 'te', 'hi', 'ta', 'es', 'fr'] as const).map((langCode) => (
               <TouchableOpacity
                 key={langCode}
                 onPress={() => setLanguage(langCode)}
@@ -127,7 +140,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
                     selectedLanguage === langCode && styles.modeChipTextActiveDark,
                   ]}
                 >
-                  {langCode === 'en' ? 'English' : langCode === 'te' ? 'Telugu' : 'Hindi'}
+                  {langCode.toUpperCase()}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -138,7 +151,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>DEVELOPER & TESTING TOOLS</Text>
           <Text style={styles.cardDesc}>
-            Test the complete first-time onboarding flow from the beginning:
+            Test the complete first-time onboarding and voice/visual registration from scratch:
           </Text>
 
           <AccessibleButton
@@ -153,7 +166,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         <View style={styles.appInfoBox}>
           <Text style={styles.appInfoTitle}>Access+ Mobile v1.0.0</Text>
           <Text style={styles.appInfoDesc}>
-            Phase 1 Mobile Application Shell & Core Navigation
+            Phase 3: Registration, Local User Profile & Emergency Contact Setup
           </Text>
         </View>
       </ScrollView>
@@ -201,7 +214,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textHighEmphasis,
     fontWeight: '700',
-    maxWidth: '60%',
+    maxWidth: '65%',
     textAlign: 'right',
   },
   modeButtonsRow: {

@@ -5,9 +5,11 @@ import { SplashScreen } from '../screens/onboarding/SplashScreen';
 import { WelcomeScreen } from '../screens/onboarding/WelcomeScreen';
 import { ModeSelectionScreen } from '../screens/onboarding/ModeSelectionScreen';
 import { LanguageSelectionScreen } from '../screens/onboarding/LanguageSelectionScreen';
+import { VoiceRegistrationScreen } from '../screens/onboarding/VoiceRegistrationScreen';
 import { RegistrationScreen } from '../screens/onboarding/RegistrationScreen';
 import { EmergencyContactScreen } from '../screens/onboarding/EmergencyContactScreen';
 import { GuardianSetupScreen } from '../screens/onboarding/GuardianSetupScreen';
+import { ReviewSummaryScreen } from '../screens/onboarding/ReviewSummaryScreen';
 import { VisualDashboardShell } from '../screens/blind/VisualDashboardShell';
 import { HearingDashboardShell } from '../screens/deaf/HearingDashboardShell';
 import { GuardianDashboardShell } from '../screens/guardian/GuardianDashboardShell';
@@ -25,6 +27,8 @@ export const RootNavigator: React.FC = () => {
     setMode,
     setLanguage,
     updateProfile,
+    setEmergencyContact,
+    setGuardianState,
     goToOnboardingStep,
     completeOnboarding,
   } = useApp();
@@ -36,7 +40,7 @@ export const RootNavigator: React.FC = () => {
     return <SplashScreen />;
   }
 
-  // 2. First-time Onboarding Flow
+  // 2. First-Time Onboarding Flow
   if (!isOnboardingCompleted) {
     switch (onboardingStep) {
       case 'welcome':
@@ -49,9 +53,9 @@ export const RootNavigator: React.FC = () => {
       case 'mode_selection':
         return (
           <ModeSelectionScreen
-            onSelectMode={(mode) => {
-              setMode(mode);
-              goToOnboardingStep('language_selection');
+            onSelectMode={async (mode) => {
+              await setMode(mode);
+              await goToOnboardingStep('language_selection');
             }}
             onBack={() => goToOnboardingStep('welcome')}
           />
@@ -68,6 +72,20 @@ export const RootNavigator: React.FC = () => {
         );
 
       case 'registration':
+        // ROUTE ADAPTIVELY BASED ON ACCESSIBILITY MODE
+        if (activeMode === 'blind') {
+          // VOICE-FIRST REGISTRATION FOR BLIND USERS
+          return (
+            <VoiceRegistrationScreen
+              initialProfile={userProfile}
+              onSaveProfile={updateProfile}
+              onComplete={completeOnboarding}
+              onBack={() => goToOnboardingStep('language_selection')}
+            />
+          );
+        }
+
+        // CONVENTIONAL VISUAL STEP 1 FOR DEAF & GUARDIAN USERS
         return (
           <RegistrationScreen
             userProfile={userProfile}
@@ -80,8 +98,18 @@ export const RootNavigator: React.FC = () => {
       case 'emergency_contact':
         return (
           <EmergencyContactScreen
-            initialContact={userProfile.emergencyContact}
-            onSaveContact={(contact) => updateProfile({ emergencyContact: contact })}
+            initialContact={
+              userProfile.emergencyContact ||
+              userProfile.emergencyContacts?.[0] || {
+                id: 'ec_1',
+                name: '',
+                phoneNumber: '',
+                relationship: 'Family',
+              }
+            }
+            onSaveContact={async (contact) => {
+              await setEmergencyContact(contact);
+            }}
             onContinue={() => goToOnboardingStep('guardian_setup')}
             onBack={() => goToOnboardingStep('registration')}
           />
@@ -90,17 +118,30 @@ export const RootNavigator: React.FC = () => {
       case 'guardian_setup':
         return (
           <GuardianSetupScreen
-            onComplete={(guardianData) => {
-              if (guardianData) {
-                updateProfile({
-                  guardianLinked: !!guardianData.guardianPhone || !!guardianData.guardianCode,
-                  guardianPhone: guardianData.guardianPhone,
-                  guardianCode: guardianData.guardianCode,
+            onComplete={async (guardianData) => {
+              if (guardianData && (guardianData.guardianPhone || guardianData.guardianCode)) {
+                await setGuardianState({
+                  guardianLinked: true,
+                  phoneNumber: guardianData.guardianPhone,
+                  phone: guardianData.guardianPhone,
+                  code: guardianData.guardianCode,
                 });
+              } else {
+                await setGuardianState({ guardianLinked: false });
               }
-              completeOnboarding();
+              await goToOnboardingStep('review');
             }}
             onBack={() => goToOnboardingStep('emergency_contact')}
+          />
+        );
+
+      case 'review':
+        return (
+          <ReviewSummaryScreen
+            userProfile={userProfile}
+            onEditSection={(step) => goToOnboardingStep(step)}
+            onConfirmComplete={completeOnboarding}
+            onBack={() => goToOnboardingStep('guardian_setup')}
           />
         );
 
@@ -142,7 +183,7 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
-  // Fallback to Visual Dashboard
+  // Fallback
   return (
     <VisualDashboardShell
       onOpenSettings={() => setIsSettingsOpen(true)}
