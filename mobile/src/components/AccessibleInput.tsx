@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,9 @@ interface AccessibleInputProps extends TextInputProps {
   helperText?: string;
   errorText?: string;
   containerStyle?: ViewStyle;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  lightMode?: boolean;
 }
 
 export const AccessibleInput: React.FC<AccessibleInputProps> = ({
@@ -22,23 +25,67 @@ export const AccessibleInput: React.FC<AccessibleInputProps> = ({
   helperText,
   errorText,
   containerStyle,
+  leftIcon,
+  rightIcon,
+  lightMode = true,
   ...inputProps
 }) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
+
+  const labelColor = lightMode ? palette.primaryText : Colors.textHighEmphasis;
+  const inputBg = lightMode ? palette.card : Colors.surfaceElevated;
+  const textColor = lightMode ? palette.primaryText : Colors.textHighEmphasis;
+  const placeholderColor = lightMode ? '#94A3B8' : Colors.textMuted;
+  const borderColor = errorText
+    ? Colors.danger
+    : isFocused
+    ? palette.accentTeal
+    : lightMode
+    ? palette.border
+    : Colors.borderSubtle;
+
   return (
     <View style={[styles.container, containerStyle]}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessible={true}
-        accessibilityLabel={label}
-        accessibilityHint={helperText}
-        placeholderTextColor={Colors.textMuted}
-        style={[styles.input, errorText ? styles.inputError : null]}
-        {...inputProps}
-      />
+      <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
+      <View
+        style={[
+          styles.inputRow,
+          {
+            backgroundColor: inputBg,
+            borderColor: borderColor,
+            borderWidth: isFocused ? 1.5 : 1,
+          },
+        ]}
+      >
+        {leftIcon ? <View style={styles.leftIconWrapper}>{leftIcon}</View> : null}
+        <TextInput
+          accessible={true}
+          accessibilityLabel={label}
+          accessibilityHint={helperText}
+          placeholderTextColor={placeholderColor}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={[styles.input, { color: textColor }]}
+          {...inputProps}
+        />
+        {rightIcon ? <View style={styles.rightIconWrapper}>{rightIcon}</View> : null}
+      </View>
       {errorText ? (
         <Text style={styles.errorText}>{errorText}</Text>
       ) : helperText ? (
-        <Text style={styles.helperText}>{helperText}</Text>
+        <Text style={[styles.helperText, { color: lightMode ? palette.secondaryText : Colors.textMuted }]}>
+          {helperText}
+        </Text>
       ) : null}
     </View>
   );
@@ -46,40 +93,47 @@ export const AccessibleInput: React.FC<AccessibleInputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: Spacing.sm,
+    marginVertical: 6,
   },
   label: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textHighEmphasis,
-    marginBottom: Spacing.xs + 2,
-    letterSpacing: 0.3,
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    shadowColor: '#0F9D9A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   input: {
-    minHeight: Spacing.minTouchTarget,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    fontSize: 17,
-    fontWeight: '600',
-    color: Colors.textHighEmphasis,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    paddingVertical: 12,
   },
-  inputError: {
-    borderColor: Colors.danger,
+  leftIconWrapper: {
+    marginRight: 12,
+  },
+  rightIconWrapper: {
+    marginLeft: 12,
   },
   helperText: {
     fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: Spacing.xs,
-    fontWeight: '500',
+    marginTop: 4,
+    fontWeight: '400',
   },
   errorText: {
     fontSize: 13,
     color: Colors.danger,
-    marginTop: Spacing.xs,
+    marginTop: 4,
     fontWeight: '600',
   },
 });

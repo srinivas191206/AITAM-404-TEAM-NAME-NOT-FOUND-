@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { ttsService } from '../../services/ttsService';
@@ -22,24 +23,83 @@ interface VisualDashboardShellProps {
   onOpenSettings: () => void;
 }
 
+const EyeHeaderIcon = ({ color = '#0F9D9A', size = 24 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+    <Circle cx="12" cy="12" r="3.5" fill={color} />
+  </Svg>
+);
+
+const SettingsGearIcon = ({ color = '#0F9D9A', size = 22 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="3" />
+    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </Svg>
+);
+
+const BigMicWavesIcon = ({ color = '#0F9D9A' }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+    <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
+      <Rect x="2" y="12" width="3" height="12" rx="1.5" fill="#BCE7E5" />
+      <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
+      <Rect x="16" y="2" width="3" height="32" rx="1.5" fill={color} />
+    </Svg>
+
+    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#D7F3F1', justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={36} height={36} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" fill={color} />
+        <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <Path d="M12 19v3M8 22h8" />
+      </Svg>
+    </View>
+
+    <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
+      <Rect x="2" y="2" width="3" height="32" rx="1.5" fill={color} />
+      <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
+      <Rect x="16" y="12" width="3" height="12" rx="1.5" fill="#BCE7E5" />
+    </Svg>
+  </View>
+);
+
+const SpeakerIcon = ({ color = '#0F9D9A', size = 16 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M11 5L6 9H2v6h4l5 4V5z" />
+    <Path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+  </Svg>
+);
+
+const ClockIcon = ({ color = '#0F9D9A', size = 16 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M12 6v6l4 2" />
+  </Svg>
+);
+
 export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   onOpenSettings,
 }) => {
   const [voiceState, setVoiceState] = useState<VoiceState>('READY');
-  const [transcript, setTranscript] = useState<string>('');
+  const [transcript, setTranscript] = useState<string>('What time is it?');
   const [responseMessage, setResponseMessage] = useState<string>(
-    'Voice assistant ready. Tap the microphone area to speak.'
+    'I heard you. Intelligent commands will be connected next.'
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
-
-    // App state listener to stop audio on background/minimize
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
     return () => {
       isMountedRef.current = false;
       subscription.remove();
@@ -61,32 +121,25 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
-  /**
-   * Handle primary Microphone activation
-   */
   const handleMicrophonePress = async () => {
-    // 1. Interrupt any active TTS or ongoing speech
     if (ttsService.getSpeakingState()) {
       await ttsService.stop();
     }
 
-    // If currently listening, tapping stops listening
     if (voiceState === 'LISTENING') {
       await hapticService.light();
       await speechRecognitionService.stopListening();
       setVoiceState('READY');
-      setResponseMessage('Listening cancelled. Voice assistant ready.');
+      setResponseMessage('Voice assistant ready. Tap microphone to speak.');
       return;
     }
 
-    // 2. Light haptic feedback for mic activation
     await hapticService.light();
     setErrorMessage(null);
     setVoiceState('LISTENING');
     setTranscript('');
     setResponseMessage('Listening...');
 
-    // 3. Start controlled listening session
     const started = await speechRecognitionService.startListening({
       onStart: () => {
         if (isMountedRef.current) {
@@ -115,23 +168,18 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
-  /**
-   * Process recognized speech transcript through Phase 4.1 Temporary Response System
-   */
   const processSpokenTranscript = async (rawTranscript: string) => {
     await hapticService.medium();
     setVoiceState('PROCESSING');
     setTranscript(rawTranscript);
     setResponseMessage('Processing recognized speech...');
 
-    // Small processing pause to mimic natural speech turn
     setTimeout(async () => {
       if (!isMountedRef.current) return;
 
       const normalized = rawTranscript.trim().toLowerCase();
       let responseText = '';
 
-      // Phase 4.1 Temporary Response Rules
       if (normalized === 'hello' || normalized.startsWith('hello') || normalized === 'hi') {
         responseText = "Hello. I'm listening.";
       } else if (
@@ -146,7 +194,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
       setResponseMessage(responseText);
       setVoiceState('RESPONDING');
 
-      // Speak response aloud via TTS
       await ttsService.speak(responseText, {
         onDone: async () => {
           if (isMountedRef.current) {
@@ -163,9 +210,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }, 400);
   };
 
-  /**
-   * Handle silence timeout
-   */
   const handleSilenceTimeout = async () => {
     await hapticService.error();
     setVoiceState('ERROR');
@@ -182,15 +226,11 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     });
   };
 
-  /**
-   * Handle speech & permission errors gracefully
-   */
   const handleVoiceError = async (errType: string) => {
     await hapticService.error();
     setVoiceState('ERROR');
 
     let spokenError = '';
-
     if (errType === 'permission_denied' || errType === 'permission_permanently_denied') {
       spokenError =
         "I can't access the microphone. You can enable microphone access in your phone settings.";
@@ -212,9 +252,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     });
   };
 
-  /**
-   * Test speech simulation trigger (for automated and physical testing)
-   */
   const triggerSimulation = (phrase: string) => {
     if (phrase === '__SILENCE__') {
       handleSilenceTimeout();
@@ -223,75 +260,46 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
     }
   };
 
-  const getStateAccessibilityLabel = () => {
-    switch (voiceState) {
-      case 'LISTENING':
-        return 'Assistant is listening. Speak your voice command.';
-      case 'PROCESSING':
-        return 'Assistant is processing your voice.';
-      case 'RESPONDING':
-        return `Assistant is speaking: ${responseMessage}`;
-      case 'ERROR':
-        return `Assistant error: ${errorMessage || responseMessage}`;
-      case 'READY':
-      default:
-        return 'Assistant is ready. Tap the microphone area to speak.';
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* CALM ACCESSIBLE HEADER */}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* HEADER WITH TITLE & SETTINGS ICON */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>👁️ Visual Assistant</Text>
-            <Text style={styles.headerGreeting}>Hi. How can I help you?</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.titleIconCircle, { backgroundColor: palette.accentLight }]}>
+                <EyeHeaderIcon color={palette.accentTeal} size={24} />
+              </View>
+              <Text style={[styles.headerTitle, { color: palette.primaryText }]}>Visual Assistant</Text>
+            </View>
+            <Text style={[styles.headerGreeting, { color: palette.secondaryText }]}>Hi. How can I help you?</Text>
           </View>
           <TouchableOpacity
             accessible={true}
             accessibilityLabel="Open Settings"
-            accessibilityHint="Double tap to open profile and app settings"
             accessibilityRole="button"
             onPress={async () => {
               await cleanupAudio();
               onOpenSettings();
             }}
-            style={styles.settingsIconBtn}
+            style={[styles.settingsIconBtn, { backgroundColor: palette.accentLight }]}
           >
-            <Text style={styles.settingsIcon}>⚙️</Text>
+            <SettingsGearIcon color={palette.accentTeal} size={22} />
           </TouchableOpacity>
         </View>
 
-        {/* LOGICAL STATE HUD */}
-        <View
-          accessible={true}
-          accessibilityLabel={getStateAccessibilityLabel()}
-          style={[
-            styles.statusBox,
-            voiceState === 'LISTENING' && styles.statusBoxListening,
-            voiceState === 'ERROR' && styles.statusBoxError,
-          ]}
-        >
+        {/* STATE INDICATOR HUD CARD */}
+        <View style={[styles.statusBox, { backgroundColor: palette.card, borderColor: palette.border }]}>
           <View style={styles.stateIndicatorRow}>
-            <View
-              style={[
-                styles.stateDot,
-                voiceState === 'LISTENING' && styles.dotListening,
-                voiceState === 'PROCESSING' && styles.dotProcessing,
-                voiceState === 'RESPONDING' && styles.dotResponding,
-                voiceState === 'ERROR' && styles.dotError,
-                voiceState === 'READY' && styles.dotReady,
-              ]}
-            />
-            <Text style={styles.stateLabel}>STATE: {voiceState}</Text>
+            <View style={[styles.stateDot, { backgroundColor: palette.accentTeal }]} />
+            <Text style={[styles.stateLabel, { color: palette.accentTeal }]}>STATE: {voiceState}</Text>
           </View>
-          <Text style={styles.statusMessage}>{responseMessage}</Text>
+          <Text style={[styles.statusMessage, { color: palette.primaryText }]}>{responseMessage}</Text>
         </View>
 
-        {/* LARGE ACCESSIBLE MICROPHONE TOUCH AREA */}
+        {/* LARGE INTERACTIVE VOICE MIC CARD */}
         <TouchableOpacity
           accessible={true}
           accessibilityLabel={
@@ -299,22 +307,19 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               ? 'Microphone is active. Tap to cancel listening.'
               : 'Voice assistant. Activate microphone.'
           }
-          accessibilityHint="Double tap to speak to the assistant"
           accessibilityRole="button"
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           onPress={handleMicrophonePress}
           style={[
             styles.micArea,
-            voiceState === 'LISTENING' && styles.micAreaListening,
-            voiceState === 'PROCESSING' && styles.micAreaProcessing,
-            voiceState === 'RESPONDING' && styles.micAreaResponding,
-            voiceState === 'ERROR' && styles.micAreaError,
+            {
+              backgroundColor: '#F4FBFB',
+              borderColor: palette.accentTeal,
+            },
           ]}
         >
-          <View style={styles.micIconCircle}>
-            <Text style={styles.micEmoji}>🎙️</Text>
-          </View>
-          <Text style={styles.micTitle}>
+          <BigMicWavesIcon color={palette.accentTeal} />
+          <Text style={[styles.micTitle, { color: palette.accentTeal }]}>
             {voiceState === 'LISTENING'
               ? 'LISTENING...'
               : voiceState === 'PROCESSING'
@@ -325,37 +330,36 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               ? 'TAP TO RETRY'
               : 'TAP TO SPEAK'}
           </Text>
-          <Text style={styles.micSubtitle}>
+          <Text style={[styles.micSubtitle, { color: palette.secondaryText }]}>
             {voiceState === 'LISTENING'
               ? 'Say "Hello" or "How are you?"'
               : 'Tap to start voice interaction'}
           </Text>
         </TouchableOpacity>
 
-        {/* RECOGNIZED TRANSCRIPT DISPLAY */}
+        {/* RECOGNIZED SPEECH TRANSCRIPT */}
         {transcript ? (
-          <View
-            accessible={true}
-            accessibilityLabel={`Recognized speech: ${transcript}`}
-            style={styles.transcriptCard}
-          >
-            <Text style={styles.transcriptLabel}>RECOGNIZED SPEECH:</Text>
-            <Text style={styles.transcriptText}>"{transcript}"</Text>
+          <View style={[styles.transcriptCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+            <Text style={[styles.transcriptLabel, { color: palette.accentTeal }]}>RECOGNIZED SPEECH:</Text>
+            <Text style={[styles.transcriptText, { color: palette.primaryText }]}>"{transcript}"</Text>
           </View>
         ) : null}
 
-        {/* ACCESSIBILITY SPEECH TESTING TRAY (FOR VERIFICATION) */}
-        <View style={styles.testTray}>
-          <Text style={styles.testTrayLabel}>TEST VOICE INTERACTION (SIMULATION):</Text>
+        {/* VOICE SIMULATION TRAY */}
+        <View style={[styles.testTray, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.testTrayLabel, { color: palette.secondaryText }]}>
+            TEST VOICE INTERACTION (SIMULATION):
+          </Text>
           <View style={styles.testChipsRow}>
             <TouchableOpacity
               accessible={true}
               accessibilityLabel="Simulate saying Hello"
               accessibilityRole="button"
               onPress={() => triggerSimulation('Hello')}
-              style={styles.testChip}
+              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
-              <Text style={styles.testChipText}>"Hello"</Text>
+              <SpeakerIcon color={palette.accentTeal} size={15} />
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Hello"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -363,9 +367,10 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Simulate saying How are you"
               accessibilityRole="button"
               onPress={() => triggerSimulation('How are you?')}
-              style={styles.testChip}
+              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
-              <Text style={styles.testChipText}>"How are you?"</Text>
+              <SpeakerIcon color={palette.accentTeal} size={15} />
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"How are you?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -373,9 +378,10 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Simulate saying What time is it"
               accessibilityRole="button"
               onPress={() => triggerSimulation('What time is it?')}
-              style={styles.testChip}
+              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
-              <Text style={styles.testChipText}>"What time is it?"</Text>
+              <SpeakerIcon color={palette.accentTeal} size={15} />
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What time is it?"</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -383,9 +389,10 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
               accessibilityLabel="Simulate silence timeout"
               accessibilityRole="button"
               onPress={() => triggerSimulation('__SILENCE__')}
-              style={[styles.testChip, styles.testChipSilence]}
+              style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
             >
-              <Text style={styles.testChipText}>Silence Timeout</Text>
+              <ClockIcon color={palette.accentTeal} size={15} />
+              <Text style={[styles.testChipText, { color: palette.primaryText }]}>Silence Timeout</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -397,206 +404,135 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   content: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xxxl,
-    gap: Spacing.md,
+    gap: 14,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.xs,
+    marginBottom: 4,
   },
   headerLeft: {
     flex: 1,
   },
+  titleIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.blindPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.3,
   },
   headerGreeting: {
     fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textMediumEmphasis,
-    marginTop: 2,
+    fontWeight: '400',
+    marginTop: 4,
   },
   settingsIconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsIcon: {
-    fontSize: 22,
-  },
   statusBox: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.md,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  statusBoxListening: {
-    borderColor: Colors.blindPrimary,
-    backgroundColor: '#1E1A14',
-  },
-  statusBoxError: {
-    borderColor: Colors.danger,
-    backgroundColor: '#201212',
   },
   stateIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 8,
   },
   stateDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginRight: Spacing.xs + 2,
-  },
-  dotReady: {
-    backgroundColor: '#EAB308',
-  },
-  dotListening: {
-    backgroundColor: '#22C55E',
-  },
-  dotProcessing: {
-    backgroundColor: '#3B82F6',
-  },
-  dotResponding: {
-    backgroundColor: Colors.blindPrimary,
-  },
-  dotError: {
-    backgroundColor: Colors.danger,
+    marginRight: 8,
   },
   stateLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textMediumEmphasis,
     letterSpacing: 0.8,
   },
   statusMessage: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textHighEmphasis,
+    fontSize: 16,
+    fontWeight: '700',
     lineHeight: 22,
   },
   micArea: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.xl,
+    borderRadius: 20,
+    paddingVertical: 26,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.borderSubtle,
-    minHeight: 180,
-  },
-  micAreaListening: {
-    borderColor: '#22C55E',
-    backgroundColor: '#142217',
-  },
-  micAreaProcessing: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#131A26',
-  },
-  micAreaResponding: {
-    borderColor: Colors.blindPrimary,
-    backgroundColor: '#231B10',
-  },
-  micAreaError: {
-    borderColor: Colors.danger,
-    backgroundColor: '#241212',
-  },
-  micIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.surfaceInteractive,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  micEmoji: {
-    fontSize: 32,
+    borderWidth: 1.5,
+    marginVertical: 2,
   },
   micTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
-    color: Colors.textHighEmphasis,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    marginTop: 16,
   },
   micSubtitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textMediumEmphasis,
-    marginTop: Spacing.xs,
+    fontWeight: '400',
+    marginTop: 4,
   },
   transcriptCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.md,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
   transcriptLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.blindPrimary,
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.6,
+    marginBottom: 6,
   },
   transcriptText: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textHighEmphasis,
     lineHeight: 24,
   },
   testTray: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.md,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    marginTop: Spacing.xs,
   },
   testTrayLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.textMediumEmphasis,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.sm,
+    letterSpacing: 0.6,
+    marginBottom: 10,
   },
   testChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.xs + 2,
+    gap: 8,
   },
   testChip: {
-    backgroundColor: Colors.surfaceInteractive,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Spacing.radiusSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  testChipSilence: {
-    borderColor: '#78350F',
   },
   testChipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textHighEmphasis,
   },
 });

@@ -8,11 +8,13 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { LanguageCode, LanguageOption, AccessibilityMode } from '../../types';
+import Svg, { Circle } from 'react-native-svg';
+import { LanguageCode, LanguageOption } from '../../types';
 import { LanguageRegistry, getLanguageLabel } from '../../config/languages';
 import { Colors } from '../../theme/colors';
 import { Spacing } from '../../theme/spacing';
 import { AppHeader } from '../../components/AppHeader';
+import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
 import { useApp } from '../../context/AppContext';
@@ -24,6 +26,19 @@ interface LanguageSelectionScreenProps {
   onBack: () => void;
 }
 
+const RadioCheckedIcon = ({ color = '#0F9D9A' }) => (
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2.5" />
+    <Circle cx="12" cy="12" r="5" fill={color} />
+  </Svg>
+);
+
+const RadioUncheckedIcon = ({ color = '#CBD5E1' }) => (
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2" />
+  </Svg>
+);
+
 export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = ({
   selectedLanguage,
   onSelectLanguage,
@@ -32,6 +47,16 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
 }) => {
   const { activeMode } = useApp();
   const [visualToast, setVisualToast] = useState<string | null>(null);
+
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
 
   useEffect(() => {
     if (activeMode === 'blind') {
@@ -70,27 +95,31 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
-      <AppHeader title="Select Language" onBack={onBack} />
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
+      <AppHeader title="Select Language" onBack={onBack} lightMode={true} />
 
       {visualToast ? (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>✓ {visualToast}</Text>
+        <View style={[styles.toast, { backgroundColor: palette.accentLight, borderColor: palette.accentTeal }]}>
+          <Text style={[styles.toastText, { color: palette.accentTeal }]}>✓ {visualToast}</Text>
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* INTRO HEADER */}
         <View style={styles.intro}>
-          <Text style={styles.stepLabel}>STEP 2 OF 5</Text>
-          <Text style={styles.title}>Language Preferences</Text>
-          <Text style={styles.subtitle}>
+          <View style={[styles.stepBadge, { backgroundColor: palette.accentLight }]}>
+            <Text style={[styles.stepBadgeText, { color: palette.accentTeal }]}>STEP 2 OF 5</Text>
+          </View>
+          <Text style={[styles.title, { color: palette.primaryText }]}>Language Preferences</Text>
+          <Text style={[styles.subtitle, { color: palette.secondaryText }]}>
             {activeMode === 'blind'
               ? 'Voice responses and screen reader guidance will use this language.'
               : 'Screen text and live captions will adapt to this language.'}
           </Text>
         </View>
 
+        {/* LANGUAGES RADIO LIST */}
         <View style={styles.languagesList}>
           {LanguageRegistry.supportedLanguages.map((lang) => {
             const isSelected = selectedLanguage === lang.code;
@@ -104,32 +133,37 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
                 accessibilityState={{ selected: isSelected }}
                 activeOpacity={0.8}
                 onPress={() => handleSelect(lang)}
-                style={[styles.langCard, isSelected && styles.langCardSelected]}
+                style={[
+                  styles.langCard,
+                  {
+                    backgroundColor: isSelected ? '#F4FBFB' : palette.card,
+                    borderColor: isSelected ? palette.accentTeal : palette.border,
+                    borderWidth: isSelected ? 1.5 : 1,
+                  },
+                ]}
               >
                 <View style={styles.langTextGroup}>
-                  <Text style={[styles.langLabel, isSelected && styles.langLabelSelected]}>
+                  <Text style={[styles.langLabel, { color: palette.primaryText }, isSelected && styles.langLabelSelected]}>
                     {lang.label}
                   </Text>
-                  <Text style={styles.nativeLabel}>{lang.nativeLabel}</Text>
+                  <Text style={[styles.nativeLabel, { color: palette.secondaryText }]}>{lang.nativeLabel}</Text>
                 </View>
-                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                  {isSelected ? <View style={styles.radioDot} /> : null}
-                </View>
+                {isSelected ? <RadioCheckedIcon color={palette.accentTeal} /> : <RadioUncheckedIcon color="#CBD5E1" />}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <TouchableOpacity
-          accessible={true}
-          accessibilityLabel={`Continue to Registration with ${getLanguageLabel(selectedLanguage)}`}
-          accessibilityHint="Double tap to proceed to personal information step"
-          accessibilityRole="button"
-          onPress={handleContinuePress}
-          style={styles.continueBtn}
-        >
-          <Text style={styles.continueText}>Continue to Registration →</Text>
-        </TouchableOpacity>
+        {/* CONTINUE CTA */}
+        <View style={styles.bottomSection}>
+          <AccessibleButton
+            title="Continue to Registration →"
+            size="large"
+            variant="teal"
+            accessibilityHint="Double tap to proceed to registration"
+            onPress={handleContinuePress}
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -138,110 +172,78 @@ export const LanguageSelectionScreen: React.FC<LanguageSelectionScreenProps> = (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   content: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xxxl,
   },
   intro: {
     marginBottom: Spacing.md,
   },
-  stepLabel: {
+  stepBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginBottom: 10,
+  },
+  stepBadgeText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.blindPrimary,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.xs,
+    letterSpacing: 0.6,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    marginBottom: Spacing.xs,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
-    color: Colors.textMediumEmphasis,
     lineHeight: 22,
+    fontWeight: '400',
   },
   toast: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 10,
     paddingHorizontal: Spacing.lg,
     borderBottomWidth: 1,
-    borderColor: Colors.borderSubtle,
     alignItems: 'center',
   },
   toastText: {
-    color: Colors.success,
-    fontWeight: '700',
     fontSize: 14,
+    fontWeight: '700',
   },
   languagesList: {
-    gap: Spacing.sm,
+    gap: 12,
     marginBottom: Spacing.xl,
   },
   langCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.borderSubtle,
-    minHeight: Spacing.minTouchTarget,
-  },
-  langCardSelected: {
-    borderColor: Colors.blindBorder,
-    backgroundColor: Colors.blindSurface,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    minHeight: 60,
   },
   langTextGroup: {
     flex: 1,
   },
   langLabel: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: Colors.textHighEmphasis,
+    letterSpacing: -0.2,
   },
   langLabelSelected: {
-    color: Colors.blindPrimary,
     fontWeight: '800',
   },
   nativeLabel: {
-    fontSize: 14,
-    color: Colors.textMuted,
+    fontSize: 13,
     marginTop: 2,
+    fontWeight: '400',
   },
-  radioCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleSelected: {
-    borderColor: Colors.blindPrimary,
-  },
-  radioDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.blindPrimary,
-  },
-  continueBtn: {
-    backgroundColor: Colors.blindPrimary,
-    minHeight: Spacing.minTouchTarget,
-    borderRadius: Spacing.radiusMd,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  continueText: {
-    color: '#121110',
-    fontSize: 18,
-    fontWeight: '800',
+  bottomSection: {
+    marginTop: Spacing.xs,
   },
 });

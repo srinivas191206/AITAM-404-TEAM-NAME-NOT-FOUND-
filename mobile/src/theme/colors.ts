@@ -26,10 +26,21 @@ export const Colors = {
   guardianAccent: '#38BDF8',
 
   // Safety & Semantics
-  info: '#38BDF8',
-  success: '#16A34A', // Forest Green
-  warning: '#D97706', // Warm Terracotta / Amber
+  info: '#2563EB',
+  success: '#16A344', // Forest Green
+  warning: '#F59E0B', // Warm Amber
   danger: '#DC2626', // High-Visibility Red
   emergency: '#991B1B', // Deep Emergency Crimson
   emergencySurface: '#450A0A',
+
+  // Teal & Slate Design System Palette (Welcome & Clean Light Theme)
+  tealSlate: {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  },
 };

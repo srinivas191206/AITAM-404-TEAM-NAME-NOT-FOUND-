@@ -8,6 +8,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import {
   EmergencyContact,
   GuardianState,
@@ -29,6 +30,41 @@ interface VoiceRegistrationScreenProps {
   onBack: () => void;
 }
 
+const MicHeaderIcon = ({ color = '#0F9D9A', size = 26 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+    <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <Path d="M12 19v3M8 22h8" />
+  </Svg>
+);
+
+const BigMicWavesIcon = ({ color = '#0F9D9A', size = 48 }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+    {/* Left Wave lines */}
+    <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
+      <Rect x="2" y="12" width="3" height="12" rx="1.5" fill="#BCE7E5" />
+      <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
+      <Rect x="16" y="2" width="3" height="32" rx="1.5" fill={color} />
+    </Svg>
+
+    {/* Center Mic Circle */}
+    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#D7F3F1', justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={36} height={36} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" fill={color} />
+        <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <Path d="M12 19v3M8 22h8" />
+      </Svg>
+    </View>
+
+    {/* Right Wave lines */}
+    <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
+      <Rect x="2" y="2" width="3" height="32" rx="1.5" fill={color} />
+      <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
+      <Rect x="16" y="12" width="3" height="12" rx="1.5" fill="#BCE7E5" />
+    </Svg>
+  </View>
+);
+
 export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = ({
   initialProfile,
   onSaveProfile,
@@ -38,10 +74,19 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
   const [currentField, setCurrentField] = useState<VoiceRegistrationField>('fullName');
   const [pendingValue, setPendingValue] = useState<string>('');
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
-  const [isListening, setIsListening] = useState<boolean>(false);
   const [spokenTranscript, setSpokenTranscript] = useState<string>('');
 
-  // Profile data being collected
+  const palette = Colors.tealSlate || {
+    background: '#F7FAFA',
+    card: '#FFFFFF',
+    primaryText: '#102A2A',
+    secondaryText: '#64748B',
+    accentTeal: '#0F9D9A',
+    accentLight: '#D7F3F1',
+    border: '#E2E8F0',
+  };
+
+  // Profile data state
   const [fullName, setFullName] = useState<string>(initialProfile.fullName || '');
   const [phoneNumber, setPhoneNumber] = useState<string>(initialProfile.phoneNumber || '');
   const [address, setAddress] = useState<string>(initialProfile.address || '');
@@ -115,15 +160,11 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
     await hapticService.medium();
     setSpokenTranscript(rawInput);
 
-    // If currently confirming "I heard...", parse YES / NO
     if (isConfirming) {
       const confirmation = voiceInputService.parseConfirmation(rawInput);
-
       if (confirmation.isConfirmed === true) {
-        // User confirmed YES
         await handleConfirmYes();
       } else if (confirmation.isConfirmed === false) {
-        // User said NO
         await handleConfirmNo();
       } else {
         await outputService.announce(
@@ -134,9 +175,7 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
       return;
     }
 
-    // Processing new input for current field
     let cleanValue = rawInput.trim();
-
     if (currentField === 'phoneNumber' || currentField === 'emergencyContactPhone') {
       cleanValue = voiceInputService.normalizePhoneNumber(rawInput);
     }
@@ -152,7 +191,6 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
       return;
     }
 
-    // MANDATORY "I heard..." confirmation
     await outputService.announce(`I heard ${cleanValue}. Is that correct? Say Yes or No.`, 'urgent');
   };
 
@@ -276,51 +314,55 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
   const getFieldProgressText = (): string => {
     switch (currentField) {
       case 'fullName':
-        return 'Step 1 of 6: Full Name';
+        return 'STEP 1 OF 6: FULL NAME';
       case 'phoneNumber':
-        return 'Step 2 of 6: Phone Number';
+        return 'STEP 2 OF 6: PHONE NUMBER';
       case 'address':
-        return 'Step 3 of 6: Address';
+        return 'STEP 3 OF 6: ADDRESS';
       case 'emergencyContactName':
-        return 'Step 4 of 6: Emergency Contact Name';
+        return 'STEP 4 OF 6: EMERGENCY CONTACT NAME';
       case 'emergencyContactPhone':
-        return 'Step 5 of 6: Emergency Phone';
+        return 'STEP 5 OF 6: EMERGENCY PHONE';
       case 'emergencyContactRelation':
-        return 'Step 6 of 6: Relationship';
+        return 'STEP 6 OF 6: RELATIONSHIP';
       case 'guardianChoice':
-        return 'Optional: Guardian Setup';
+        return 'OPTIONAL: GUARDIAN SETUP';
       case 'review':
-        return 'Final Review & Confirmation';
+        return 'FINAL REVIEW & CONFIRMATION';
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.canvasPrimary} />
-      <AppHeader title="Voice Registration" onBack={onBack} />
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={palette.card} />
+      <AppHeader title="Voice Registration" onBack={onBack} lightMode={true} />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* STEP PROGRESS BADGE */}
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{getFieldProgressText().toUpperCase()}</Text>
+        <View style={[styles.stepBadge, { backgroundColor: palette.accentLight }]}>
+          <Text style={[styles.stepBadgeText, { color: palette.accentTeal }]}>{getFieldProgressText()}</Text>
         </View>
 
-        {/* ACTIVE QUESTION BANNER */}
-        <View style={styles.questionCard}>
-          <Text style={styles.questionIcon}>🎙️</Text>
-          <Text style={styles.questionTitle}>
-            {isConfirming
-              ? `I heard: "${pendingValue}"`
-              : getFieldPrompt(currentField)}
-          </Text>
-          <Text style={styles.questionSubtitle}>
-            {isConfirming
-              ? 'Is that correct? Say "Yes" or "No" below.'
-              : 'Tap the large microphone button or say your answer.'}
-          </Text>
+        {/* ACTIVE QUESTION PROMPT CARD */}
+        <View style={[styles.questionCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <View style={styles.questionHeader}>
+            <View style={[styles.iconCircle, { backgroundColor: palette.accentLight }]}>
+              <MicHeaderIcon color={palette.accentTeal} size={24} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.questionTitle, { color: palette.primaryText }]}>
+                {isConfirming ? `I heard: "${pendingValue}"` : getFieldPrompt(currentField)}
+              </Text>
+              <Text style={[styles.questionSubtitle, { color: palette.secondaryText }]}>
+                {isConfirming
+                  ? 'Is that correct? Say "Yes" or "No" below.'
+                  : 'Tap the large microphone button or say your answer.'}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* LARGE VOICE TRIGGER & STATE BUTTON */}
+        {/* LARGE INTERACTIVE MIC TARGET CARD */}
         <TouchableOpacity
           accessible={true}
           accessibilityLabel={
@@ -328,9 +370,8 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
               ? `I heard ${pendingValue}. Tap to repeat confirmation.`
               : `Tap to speak your ${getFieldLabel(currentField)}`
           }
-          accessibilityHint="Double tap to speak"
           accessibilityRole="button"
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           onPress={() => {
             if (isConfirming) {
               outputService.announce(`I heard ${pendingValue}. Is that correct? Say Yes or No.`, 'urgent');
@@ -338,24 +379,30 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
               askCurrentQuestion(currentField);
             }
           }}
-          style={[styles.voiceCenterBlock, isConfirming && styles.voiceConfirmingBlock]}
+          style={[
+            styles.voiceTargetCard,
+            {
+              backgroundColor: '#F4FBFB',
+              borderColor: palette.accentTeal,
+            },
+          ]}
         >
-          <Text style={styles.voiceIcon}>{isConfirming ? '❓' : '🎙️'}</Text>
-          <Text style={styles.voiceMainText}>
+          <BigMicWavesIcon color={palette.accentTeal} size={48} />
+          <Text style={[styles.voiceMainText, { color: palette.accentTeal }]}>
             {isConfirming ? 'CONFIRM ANSWER' : 'LISTENING / SPEAK'}
           </Text>
-          <Text style={styles.voiceSubtext}>
+          <Text style={[styles.voiceSubtext, { color: palette.secondaryText }]}>
             {isConfirming ? `"${pendingValue}"` : `Say your ${getFieldLabel(currentField)}`}
           </Text>
         </TouchableOpacity>
 
-        {/* CONFIRMATION CONTROLS (YES / NO / DEMO INPUTS) */}
+        {/* CONFIRMATION CONTROLS OR QUICK SIMULATION CHIPS */}
         {isConfirming ? (
           <View style={styles.confirmRow}>
             <AccessibleButton
               title="✓ YES, THAT'S RIGHT"
               size="large"
-              variant="primary"
+              variant="teal"
               style={styles.confirmBtn}
               onPress={handleConfirmYes}
             />
@@ -368,9 +415,10 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
             />
           </View>
         ) : (
-          /* QUICK SPOKEN DEMO SHORTCUTS FOR ACCESSIBILITY TESTING */
-          <View style={styles.demoTray}>
-            <Text style={styles.demoTrayLabel}>TEST SPEECH INPUT (SIMULATION):</Text>
+          <View style={[styles.demoCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+            <Text style={[styles.demoCardLabel, { color: palette.secondaryText }]}>
+              TEST SPEECH INPUT (SIMULATION):
+            </Text>
             <View style={styles.demoChipsRow}>
               {getSimulatedChips(currentField).map((phrase, idx) => (
                 <TouchableOpacity
@@ -379,23 +427,31 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
                   accessibilityLabel={`Simulate saying ${phrase}`}
                   accessibilityRole="button"
                   onPress={() => handleSpokenInput(phrase)}
-                  style={styles.demoChip}
+                  style={[styles.demoChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
                 >
-                  <Text style={styles.demoChipText}>"{phrase}"</Text>
+                  <Text style={[styles.demoChipText, { color: palette.primaryText }]}>"{phrase}"</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
         )}
 
-        {/* PROFILE SUMMARY SO FAR */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>COLLECTED PROFILE INFORMATION</Text>
-          <Text style={styles.summaryItem}>• Name: {fullName || '—'}</Text>
-          <Text style={styles.summaryItem}>• Phone: {phoneNumber || '—'}</Text>
-          <Text style={styles.summaryItem}>• Address: {address || '—'}</Text>
-          <Text style={styles.summaryItem}>
-            • Emergency Contact: {emergencyName ? `${emergencyName} (${emergencyPhone})` : '—'}
+        {/* COLLECTED PROFILE SUMMARY CARD */}
+        <View style={[styles.summaryCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <Text style={[styles.summaryTitle, { color: palette.secondaryText }]}>
+            COLLECTED PROFILE INFORMATION
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Name: <Text style={{ fontWeight: fullName ? '700' : '400' }}>{fullName || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Phone: <Text style={{ fontWeight: phoneNumber ? '700' : '400' }}>{phoneNumber || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Address: <Text style={{ fontWeight: address ? '700' : '400' }}>{address || '—'}</Text>
+          </Text>
+          <Text style={[styles.summaryItem, { color: palette.primaryText }]}>
+            • Emergency Contact: <Text style={{ fontWeight: emergencyName ? '700' : '400' }}>{emergencyName ? `${emergencyName} (${emergencyPhone})` : '—'}</Text>
           </Text>
         </View>
       </ScrollView>
@@ -448,142 +504,127 @@ function getSimulatedChips(field: VoiceRegistrationField): string[] {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.canvasPrimary,
   },
   content: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xxxl,
-    gap: Spacing.md,
+    gap: 14,
   },
-  badge: {
+  stepBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: Colors.surfaceInteractive,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: Spacing.radiusSm,
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginBottom: 2,
   },
-  badgeText: {
-    color: Colors.blindPrimary,
-    fontSize: 11,
+  stepBadgeText: {
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   questionCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusLg,
-    padding: Spacing.lg,
-    borderWidth: 2,
-    borderColor: Colors.blindBorder,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    shadowColor: '#0F9D9A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
   },
-  questionIcon: {
-    fontSize: 32,
-    marginBottom: Spacing.xs,
+  questionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    marginTop: 2,
   },
   questionTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: Colors.textHighEmphasis,
-    lineHeight: 28,
+    letterSpacing: -0.3,
+    marginBottom: 4,
   },
   questionSubtitle: {
-    fontSize: 15,
-    color: Colors.textMediumEmphasis,
-    marginTop: Spacing.xs,
-    lineHeight: 22,
-    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '400',
   },
-  voiceCenterBlock: {
-    backgroundColor: Colors.blindPrimary,
-    borderRadius: Spacing.radiusLg,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
+  voiceTargetCard: {
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.blindBorder,
-    minHeight: 140,
-    marginVertical: Spacing.xs,
-  },
-  voiceConfirmingBlock: {
-    backgroundColor: Colors.warning,
-    borderColor: '#B45309',
-  },
-  voiceIcon: {
-    fontSize: 44,
-    marginBottom: 6,
+    borderWidth: 1.5,
+    marginVertical: 2,
   },
   voiceMainText: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
-    color: '#121110',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    marginTop: 14,
   },
   voiceSubtext: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#382806',
+    fontSize: 15,
+    fontWeight: '500',
     marginTop: 4,
     textAlign: 'center',
   },
   confirmRow: {
-    gap: Spacing.sm,
+    gap: 10,
   },
   confirmBtn: {
     width: '100%',
   },
-  demoTray: {
-    backgroundColor: Colors.surfaceElevated,
-    padding: Spacing.md,
-    borderRadius: Spacing.radiusMd,
+  demoCard: {
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
   },
-  demoTrayLabel: {
+  demoCardLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.xs + 2,
+    letterSpacing: 0.6,
+    marginBottom: 10,
   },
   demoChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.xs + 2,
+    gap: 8,
   },
   demoChip: {
-    backgroundColor: Colors.surfaceInteractive,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Spacing.radiusSm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.blindBorder,
   },
   demoChipText: {
-    color: Colors.textHighEmphasis,
     fontSize: 13,
     fontWeight: '700',
   },
   summaryCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: Spacing.radiusMd,
-    padding: Spacing.lg,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-    marginTop: Spacing.sm,
+    marginTop: 2,
   },
   summaryTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.sm,
+    letterSpacing: 0.6,
+    marginBottom: 10,
   },
   summaryItem: {
     fontSize: 14,
-    color: Colors.textHighEmphasis,
-    fontWeight: '600',
     lineHeight: 22,
+    fontWeight: '400',
   },
 });

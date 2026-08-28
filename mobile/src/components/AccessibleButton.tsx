@@ -141,8 +141,8 @@ const styles = StyleSheet.create({
     borderColor: '#B45309',
   },
   teal: {
-    backgroundColor: Colors.deafPrimary,
-    borderColor: Colors.deafBorder,
+    backgroundColor: Colors.tealSlate ? Colors.tealSlate.accentTeal : '#0F9D9A',
+    borderColor: Colors.tealSlate ? Colors.tealSlate.accentTeal : '#0F9D9A',
   },
   subtle: {
     backgroundColor: Colors.surfaceElevated,
