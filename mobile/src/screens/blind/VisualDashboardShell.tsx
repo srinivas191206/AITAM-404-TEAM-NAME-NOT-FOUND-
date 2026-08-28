@@ -106,7 +106,7 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
   };
 
   const isMountedRef = useRef(true);
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<any>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -378,8 +378,8 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
         {isCameraActive ? (
           <VisionCameraPreview
             cameraRef={cameraRef}
+            isActive={isCameraActive}
             detections={activeDetections}
-            intent={detectedIntent}
           />
         ) : null}
 
