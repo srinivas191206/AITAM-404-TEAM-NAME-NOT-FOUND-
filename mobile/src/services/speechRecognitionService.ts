@@ -1,4 +1,4 @@
-﻿import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
 import { Audio } from 'expo-av';
 
 export type MicPermissionStatus = 'granted' | 'denied' | 'permanently_denied';
@@ -28,34 +28,35 @@ class SpeechRecognitionService {
   }
 
   /**
-   * Request microphone permission explicitly
+   * Request microphone permission explicitly via both Expo Audio and Android Native Permissions
    */
   public async requestPermission(): Promise<MicPermissionStatus> {
     try {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'Access+ needs access to your microphone to listen to your voice commands.',
-            buttonPositive: 'Grant Access',
-            buttonNegative: 'Deny',
-          }
-        );
+      // 1. Request via Expo Audio
+      const expoRes = await Audio.requestPermissionsAsync();
 
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          return 'granted';
-        } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-          return 'permanently_denied';
-        } else {
-          return 'denied';
+      // 2. Request via Android Permissions API if Android
+      if (Platform.OS === 'android') {
+        try {
+          const androidRes = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            {
+              title: 'Microphone Permission Needed',
+              message: 'Access+ needs microphone access to hear your voice commands.',
+              buttonPositive: 'Allow Microphone',
+              buttonNegative: 'Deny',
+            }
+          );
+          if (androidRes === PermissionsAndroid.RESULTS.GRANTED && expoRes.granted) {
+            return 'granted';
+          }
+        } catch {
+          // If Android Permissions API falls back, rely on Expo Audio
         }
       }
 
-      // Fallback via Expo Audio
-      const response = await Audio.requestPermissionsAsync();
-      if (response.granted) return 'granted';
-      return response.canAskAgain ? 'denied' : 'permanently_denied';
+      if (expoRes.granted) return 'granted';
+      return expoRes.canAskAgain ? 'denied' : 'permanently_denied';
     } catch (error) {
       console.warn('[SpeechRecognitionService] Permission Request Error:', error);
       return 'denied';
@@ -63,15 +64,20 @@ class SpeechRecognitionService {
   }
 
   /**
-   * Check current microphone permission status without re-prompting
+   * Check current microphone permission status
    */
   public async checkPermission(): Promise<boolean> {
     try {
+      const expoStatus = await Audio.getPermissionsAsync();
+      if (!expoStatus.granted) return false;
+
       if (Platform.OS === 'android') {
-        return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+        const androidStatus = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+        );
+        return androidStatus;
       }
-      const response = await Audio.getPermissionsAsync();
-      return response.granted;
+      return true;
     } catch {
       return false;
     }
@@ -82,8 +88,8 @@ class SpeechRecognitionService {
    */
   public async startListening(callbacks: SpeechRecognitionCallbacks): Promise<boolean> {
     try {
-      // 1. Ensure permission
-      const hasPermission = await this.checkPermission();
+      // 1. Always request permission if not granted
+      let hasPermission = await this.checkPermission();
       if (!hasPermission) {
         const permStatus = await this.requestPermission();
         if (permStatus !== 'granted') {
@@ -94,6 +100,7 @@ class SpeechRecognitionService {
           );
           return false;
         }
+        hasPermission = true;
       }
 
       // 2. Clean previous session
@@ -102,7 +109,7 @@ class SpeechRecognitionService {
       this.callbacks = callbacks;
       this.isListening = true;
 
-      // 3. Audio session mode setup (clean foreground recording)
+      // 3. Audio session mode setup for active microphone recording
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -110,7 +117,7 @@ class SpeechRecognitionService {
         shouldDuckAndroid: true,
       });
 
-      // 4. Create lightweight native recording to capture microphone activity
+      // 4. Create native recording instance to capture microphone input
       try {
         const { recording } = await Audio.Recording.createAsync(
           Audio.RecordingOptionsPresets.LOW_QUALITY
@@ -122,13 +129,13 @@ class SpeechRecognitionService {
 
       this.callbacks.onStart?.();
 
-      // 5. Controlled silence timeout (7 seconds max listening window)
+      // 5. Controlled silence timeout (8 seconds max listening window)
       this.clearSilenceTimer();
       this.silenceTimer = setTimeout(() => {
         if (this.isListening) {
           this.handleSilenceTimeout();
         }
-      }, 7000);
+      }, 8000);
 
       return true;
     } catch (error) {
@@ -169,7 +176,7 @@ class SpeechRecognitionService {
   }
 
   /**
-   * Handle speech recognition result (e.g. from user speech or test simulation)
+   * Handle speech recognition result
    */
   public handleResult(transcript: string): void {
     if (!this.isListening && !this.callbacks) return;

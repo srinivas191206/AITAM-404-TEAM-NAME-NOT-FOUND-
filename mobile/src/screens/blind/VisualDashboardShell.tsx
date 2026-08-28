@@ -494,58 +494,6 @@ export const VisualDashboardShell: React.FC<VisualDashboardShellProps> = ({
                 <Text style={[styles.transcriptText, { color: palette.primaryText }]}>"{transcript}"</Text>
               </View>
             ) : null}
-
-            {/* VOICE SIMULATION TRAY */}
-            <View style={[styles.testTray, { backgroundColor: palette.card, borderColor: palette.border }]}>
-              <Text style={[styles.testTrayLabel, { color: palette.secondaryText }]}>
-                TEST VOICE INTERACTION (SIMULATION):
-              </Text>
-              <View style={styles.testChipsRow}>
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate saying Hey Hi"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('Hey Hi')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <SpeakerIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Hey Hi"</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate saying What is in front of me"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('What is in front of me?')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <SpeakerIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"What's in front of me?"</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate saying Read text"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('Read text')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <SpeakerIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Read text"</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  accessible={true}
-                  accessibilityLabel="Simulate saying Check currency"
-                  accessibilityRole="button"
-                  onPress={() => triggerSimulation('Check currency')}
-                  style={[styles.testChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <SpeakerIcon color={palette.accentTeal} size={15} />
-                  <Text style={[styles.testChipText, { color: palette.primaryText }]}>"Check currency"</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </ScrollView>
         )}
       </View>

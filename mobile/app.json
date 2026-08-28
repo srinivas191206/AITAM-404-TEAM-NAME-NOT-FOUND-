@@ -16,7 +16,8 @@
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "plugins": [
@@ -37,7 +38,13 @@
         {
           "microphonePermission": "Access+ requires microphone access for live captions, speech recognition, and environmental sound alert detection."
         }
-      ]
-    ]
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4f6b4e40-8af1-4a73-950f-3b427062f10b"
+      }
+    }
   }
 }

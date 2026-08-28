@@ -22,6 +22,7 @@ import { AccessibleButton } from '../../components/AccessibleButton';
 import { outputService } from '../../services/outputService';
 import { hapticService } from '../../services/hapticService';
 import { voiceInputService } from '../../services/voiceInputService';
+import { speechRecognitionService } from '../../services/speechRecognitionService';
 
 interface VoiceRegistrationScreenProps {
   initialProfile: UserProfile;
@@ -40,14 +41,12 @@ const MicHeaderIcon = ({ color = '#0F9D9A', size = 26 }) => (
 
 const BigMicWavesIcon = ({ color = '#0F9D9A', size = 48 }) => (
   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-    {/* Left Wave lines */}
     <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
       <Rect x="2" y="12" width="3" height="12" rx="1.5" fill="#BCE7E5" />
       <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
       <Rect x="16" y="2" width="3" height="32" rx="1.5" fill={color} />
     </Svg>
 
-    {/* Center Mic Circle */}
     <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#D7F3F1', justifyContent: 'center', alignItems: 'center' }}>
       <Svg width={36} height={36} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" fill={color} />
@@ -56,7 +55,6 @@ const BigMicWavesIcon = ({ color = '#0F9D9A', size = 48 }) => (
       </Svg>
     </View>
 
-    {/* Right Wave lines */}
     <Svg width="24" height="36" viewBox="0 0 24 36" fill="none">
       <Rect x="2" y="2" width="3" height="32" rx="1.5" fill={color} />
       <Rect x="9" y="6" width="3" height="24" rx="1.5" fill="#80D0CD" />
@@ -75,6 +73,7 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
   const [pendingValue, setPendingValue] = useState<string>('');
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [spokenTranscript, setSpokenTranscript] = useState<string>('');
+  const [isListening, setIsListening] = useState<boolean>(false);
 
   const palette = Colors.tealSlate || {
     background: '#F7FAFA',
@@ -102,26 +101,45 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
   const [guardianLinked, setGuardianLinked] = useState<boolean>(false);
 
   const isMounted = useRef(true);
+  const pauseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
     startVoiceOnboarding();
     return () => {
       isMounted.current = false;
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      speechRecognitionService.stopListening();
       outputService.stopAll();
     };
   }, []);
 
   const startVoiceOnboarding = async () => {
-    await outputService.announce(
-      "Let's set up your account. I will ask you a few quick questions. First: What is your full name?",
-      'urgent'
-    );
+    await askCurrentQuestion('fullName');
+  };
+
+  const startMicListener = () => {
+    if (!isMounted.current) return;
+    setIsListening(true);
+    speechRecognitionService.startListening({
+      onResult: (spokenText: string) => {
+        if (isMounted.current && spokenText.trim()) {
+          setIsListening(false);
+          handleSpokenInput(spokenText.trim());
+        }
+      },
+      onError: () => {
+        if (isMounted.current) {
+          setIsListening(false);
+        }
+      },
+    });
   };
 
   const askCurrentQuestion = async (field: VoiceRegistrationField) => {
     setIsConfirming(false);
     setPendingValue('');
+    setIsListening(false);
 
     let question = '';
     switch (field) {
@@ -147,33 +165,26 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
         question = 'Would you like to link a guardian now, or set it up later? Say Link or Later.';
         break;
       case 'review':
-        question = `Let's review your information. Your name is ${fullName}. Phone is ${phoneNumber}. Emergency contact is ${emergencyName} at ${emergencyPhone}. Is everything correct? Say Yes to finish, or No to edit.`;
+        question = `Let's review your information. Your name is ${fullName}. Phone is ${phoneNumber}. Emergency contact is ${emergencyName} at ${emergencyPhone}. Say Yes to finish.`;
         break;
     }
 
     await outputService.announce(question, 'urgent');
+    setTimeout(() => {
+      startMicListener();
+    }, 1000);
   };
 
+  /**
+   * 2-Second Speech Pause Auto-Submit Logic
+   * When user says "Srinivas", wait 2 seconds for any additional words.
+   * If silence continues, automatically accept Srinivas and move to next question!
+   */
   const handleSpokenInput = async (rawInput: string) => {
     if (!rawInput.trim()) return;
 
     await hapticService.medium();
     setSpokenTranscript(rawInput);
-
-    if (isConfirming) {
-      const confirmation = voiceInputService.parseConfirmation(rawInput);
-      if (confirmation.isConfirmed === true) {
-        await handleConfirmYes();
-      } else if (confirmation.isConfirmed === false) {
-        await handleConfirmNo();
-      } else {
-        await outputService.announce(
-          `I heard ${rawInput}. Please say Yes to confirm, or No to say it again.`,
-          'urgent'
-        );
-      }
-      return;
-    }
 
     let cleanValue = rawInput.trim();
     if (currentField === 'phoneNumber' || currentField === 'emergencyContactPhone') {
@@ -181,58 +192,63 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
     }
 
     setPendingValue(cleanValue);
-    setIsConfirming(true);
 
-    if (currentField === 'guardianChoice') {
-      const isLater = rawInput.toLowerCase().includes('later') || rawInput.toLowerCase().includes('skip') || rawInput.toLowerCase().includes('no');
-      const choiceText = isLater ? 'Setup Later' : 'Link Guardian';
-      setPendingValue(choiceText);
-      await outputService.announce(`I heard ${choiceText}. Is that correct? Say Yes or No.`, 'urgent');
-      return;
+    // Clear previous timer if user is still speaking
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
     }
 
-    await outputService.announce(`I heard ${cleanValue}. Is that correct? Say Yes or No.`, 'urgent');
+    // 2-Second Pause Auto-Submit Timer
+    pauseTimerRef.current = setTimeout(async () => {
+      if (!isMounted.current) return;
+      await autoSubmitSpokenValue(cleanValue);
+    }, 2000);
   };
 
-  const handleConfirmYes = async () => {
+  const autoSubmitSpokenValue = async (value: string) => {
     await hapticService.heavy();
 
     switch (currentField) {
       case 'fullName':
-        setFullName(pendingValue);
-        await onSaveProfile({ fullName: pendingValue, name: pendingValue });
+        setFullName(value);
+        await onSaveProfile({ fullName: value, name: value });
+        await outputService.announce(`Name saved as ${value}.`, 'high');
         setCurrentField('phoneNumber');
-        await askCurrentQuestion('phoneNumber');
+        setTimeout(() => askCurrentQuestion('phoneNumber'), 1200);
         break;
 
       case 'phoneNumber':
-        setPhoneNumber(pendingValue);
-        await onSaveProfile({ phoneNumber: pendingValue, phone: pendingValue });
+        setPhoneNumber(value);
+        await onSaveProfile({ phoneNumber: value, phone: value });
+        await outputService.announce(`Phone number saved as ${value}.`, 'high');
         setCurrentField('address');
-        await askCurrentQuestion('address');
+        setTimeout(() => askCurrentQuestion('address'), 1200);
         break;
 
       case 'address':
-        setAddress(pendingValue);
-        await onSaveProfile({ address: pendingValue });
+        setAddress(value);
+        await onSaveProfile({ address: value });
+        await outputService.announce(`Address saved.`, 'high');
         setCurrentField('emergencyContactName');
-        await askCurrentQuestion('emergencyContactName');
+        setTimeout(() => askCurrentQuestion('emergencyContactName'), 1200);
         break;
 
       case 'emergencyContactName':
-        setEmergencyName(pendingValue);
+        setEmergencyName(value);
+        await outputService.announce(`Emergency contact name set to ${value}.`, 'high');
         setCurrentField('emergencyContactPhone');
-        await askCurrentQuestion('emergencyContactPhone');
+        setTimeout(() => askCurrentQuestion('emergencyContactPhone'), 1200);
         break;
 
       case 'emergencyContactPhone':
-        setEmergencyPhone(pendingValue);
+        setEmergencyPhone(value);
+        await outputService.announce(`Emergency phone set to ${value}.`, 'high');
         setCurrentField('emergencyContactRelation');
-        await askCurrentQuestion('emergencyContactRelation');
+        setTimeout(() => askCurrentQuestion('emergencyContactRelation'), 1200);
         break;
 
       case 'emergencyContactRelation': {
-        const relation = pendingValue || 'Family';
+        const relation = value || 'Family';
         setEmergencyRelation(relation);
 
         const contactObj: EmergencyContact = {
@@ -248,13 +264,14 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
           emergencyContact: contactObj,
         });
 
+        await outputService.announce(`Emergency contact complete.`, 'high');
         setCurrentField('guardianChoice');
-        await askCurrentQuestion('guardianChoice');
+        setTimeout(() => askCurrentQuestion('guardianChoice'), 1200);
         break;
       }
 
       case 'guardianChoice': {
-        const isLinked = pendingValue.toLowerCase().includes('link');
+        const isLinked = value.toLowerCase().includes('link');
         setGuardianLinked(isLinked);
         const guardianObj: GuardianState = {
           guardianLinked: isLinked,
@@ -264,30 +281,17 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
           guardianLinked: isLinked,
         });
 
+        await outputService.announce(`Guardian settings saved.`, 'high');
         setCurrentField('review');
-        await askCurrentQuestion('review');
+        setTimeout(() => askCurrentQuestion('review'), 1200);
         break;
       }
 
       case 'review':
+        await outputService.announce(`Profile setup complete. Entering Visual Assistant mode.`, 'high');
         await onComplete();
         break;
     }
-  };
-
-  const handleConfirmNo = async () => {
-    await hapticService.light();
-    setIsConfirming(false);
-    setPendingValue('');
-
-    if (currentField === 'review') {
-      await outputService.announce('Let us update your information from the beginning.');
-      setCurrentField('fullName');
-      await askCurrentQuestion('fullName');
-      return;
-    }
-
-    await outputService.announce(`Okay. Please say your ${getFieldLabel(currentField)} again.`);
   };
 
   const getFieldLabel = (field: VoiceRegistrationField): string => {
@@ -351,12 +355,12 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.questionTitle, { color: palette.primaryText }]}>
-                {isConfirming ? `I heard: "${pendingValue}"` : getFieldPrompt(currentField)}
+                {pendingValue ? `Recognized: "${pendingValue}"` : getFieldPrompt(currentField)}
               </Text>
               <Text style={[styles.questionSubtitle, { color: palette.secondaryText }]}>
-                {isConfirming
-                  ? 'Is that correct? Say "Yes" or "No" below.'
-                  : 'Tap the large microphone button or say your answer.'}
+                {pendingValue
+                  ? 'Waiting 2s pause to auto-save and continue...'
+                  : 'Microphone active. Speak out loud now.'}
               </Text>
             </View>
           </View>
@@ -365,20 +369,10 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
         {/* LARGE INTERACTIVE MIC TARGET CARD */}
         <TouchableOpacity
           accessible={true}
-          accessibilityLabel={
-            isConfirming
-              ? `I heard ${pendingValue}. Tap to repeat confirmation.`
-              : `Tap to speak your ${getFieldLabel(currentField)}`
-          }
+          accessibilityLabel={`Microphone active. Speak your ${getFieldLabel(currentField)}`}
           accessibilityRole="button"
           activeOpacity={0.85}
-          onPress={() => {
-            if (isConfirming) {
-              outputService.announce(`I heard ${pendingValue}. Is that correct? Say Yes or No.`, 'urgent');
-            } else {
-              askCurrentQuestion(currentField);
-            }
-          }}
+          onPress={() => startMicListener()}
           style={[
             styles.voiceTargetCard,
             {
@@ -389,52 +383,12 @@ export const VoiceRegistrationScreen: React.FC<VoiceRegistrationScreenProps> = (
         >
           <BigMicWavesIcon color={palette.accentTeal} size={48} />
           <Text style={[styles.voiceMainText, { color: palette.accentTeal }]}>
-            {isConfirming ? 'CONFIRM ANSWER' : 'LISTENING / SPEAK'}
+            {isListening ? 'MICROPHONE ACTIVE (SPEAK NOW)' : pendingValue ? `SAVING: "${pendingValue}"` : 'TAP OR SPEAK ANSWER'}
           </Text>
           <Text style={[styles.voiceSubtext, { color: palette.secondaryText }]}>
-            {isConfirming ? `"${pendingValue}"` : `Say your ${getFieldLabel(currentField)}`}
+            {pendingValue ? 'Auto-submitting in 2s...' : `Listening for your ${getFieldLabel(currentField)}...`}
           </Text>
         </TouchableOpacity>
-
-        {/* CONFIRMATION CONTROLS OR QUICK SIMULATION CHIPS */}
-        {isConfirming ? (
-          <View style={styles.confirmRow}>
-            <AccessibleButton
-              title="✓ YES, THAT'S RIGHT"
-              size="large"
-              variant="teal"
-              style={styles.confirmBtn}
-              onPress={handleConfirmYes}
-            />
-            <AccessibleButton
-              title="✗ NO, SAY AGAIN"
-              size="large"
-              variant="danger"
-              style={styles.confirmBtn}
-              onPress={handleConfirmNo}
-            />
-          </View>
-        ) : (
-          <View style={[styles.demoCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
-            <Text style={[styles.demoCardLabel, { color: palette.secondaryText }]}>
-              TEST SPEECH INPUT (SIMULATION):
-            </Text>
-            <View style={styles.demoChipsRow}>
-              {getSimulatedChips(currentField).map((phrase, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  accessible={true}
-                  accessibilityLabel={`Simulate saying ${phrase}`}
-                  accessibilityRole="button"
-                  onPress={() => handleSpokenInput(phrase)}
-                  style={[styles.demoChip, { backgroundColor: palette.card, borderColor: palette.accentTeal }]}
-                >
-                  <Text style={[styles.demoChipText, { color: palette.primaryText }]}>"{phrase}"</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* COLLECTED PROFILE SUMMARY CARD */}
         <View style={[styles.summaryCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
@@ -477,27 +431,6 @@ function getFieldPrompt(field: VoiceRegistrationField): string {
       return 'Would you like to link a guardian now?';
     case 'review':
       return 'Review your profile and confirm.';
-  }
-}
-
-function getSimulatedChips(field: VoiceRegistrationField): string[] {
-  switch (field) {
-    case 'fullName':
-      return ['Varun Kumar', 'Ananya Sharma', 'Ravi Teja'];
-    case 'phoneNumber':
-      return ['9876543210', '9123456780', '8887776655'];
-    case 'address':
-      return ['Green Park, Bengaluru', 'Main Road, Visakhapatnam', 'Sector 4, Hyderabad'];
-    case 'emergencyContactName':
-      return ['Ravi Kumar', 'Dr. Ramesh', 'Priya Sharma'];
-    case 'emergencyContactPhone':
-      return ['9988776655', '9848012345', '9123450000'];
-    case 'emergencyContactRelation':
-      return ['Family', 'Parent', 'Doctor'];
-    case 'guardianChoice':
-      return ['Link Guardian', 'Set Up Later'];
-    case 'review':
-      return ['Yes, everything is correct', 'No, please edit'];
   }
 }
 
@@ -577,38 +510,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 4,
     textAlign: 'center',
-  },
-  confirmRow: {
-    gap: 10,
-  },
-  confirmBtn: {
-    width: '100%',
-  },
-  demoCard: {
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-  },
-  demoCardLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-  },
-  demoChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  demoChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  demoChipText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   summaryCard: {
     borderRadius: 18,
